@@ -1,10 +1,13 @@
 # Shengji — Progress Log
 
-Newest entries at the top.
+Newest entries at the top. Always leave a timestamp, like so: 
+## {current date and time}
+...progress here...
+
 
 ---
 
-## Session 1 — Project Planning
+## 3/17/26 12am
 
 **Status:** Implementation plan complete. Ready to begin coding.
 

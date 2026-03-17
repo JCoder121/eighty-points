@@ -4,6 +4,54 @@ Newest entries at the top.
 
 ---
 
+## Session 4 — M2 + M3 Implementation
+
+**Status:** M2 and M3 complete. Ready to implement M4 (Game Engine).
+
+**Branch:** `feat/m3-game-state` → open PR for review.
+
+**Completed:**
+
+**M2 — Trump System & Card Ordering**
+- `src/shengji/models/trump.py`:
+  - `TrumpContext(trump_rank, trump_suit)` — frozen dataclass
+  - `card_order(card) -> tuple[int, int]` — 6-tier sortable key (tier 0: off-suit, 1: trump suit, 2: off-suit trump rank, 3: on-suit trump rank, 4: small joker, 5: big joker)
+  - `effective_suit(card) -> str` — "trump" for jokers/trump-rank/trump-suit cards; own suit in no-trump mode
+  - `are_tractor_adjacent(card1, card2) -> bool` — dynamic adjacency including circular wrap for non-trump suits and cross-tier adjacency through the trump hierarchy
+- `src/shengji/models/groups.py`:
+  - `TrickFormat` union type: `Single`, `IdenticalGroup(count)`, `Tractor(multiplicity, length)`, `Throw(components)`
+  - `find_identical_groups(cards, ctx)` — groups of size ≥ 2 by exact identity
+  - `find_tractors(cards, ctx)` — maximal consecutive identical-group runs respecting dynamic adjacency
+  - `classify_play(cards, ctx)` — classifies any card set into a TrickFormat
+- **76 new tests — all passing** (`test_trump.py`, `test_groups.py`)
+
+**M3 — Game State Model**
+- `src/shengji/models/player.py`:
+  - `Player(id, name, hand, rank, is_defending, team)`
+  - `advance_rank(steps)` — clamps at ACE; raises on negative steps
+  - `is_at_max_rank` property
+  - `to_json(include_hand)` — hides hand when `include_hand=False`, always exposes `hand_size`
+- `src/shengji/models/bid.py`:
+  - `Bid(player_id, cards, resulting_trump)` — records a bid with the TrumpContext it would produce
+- `src/shengji/models/friend_declaration.py`:
+  - `FriendDeclaration(card, ordinal, resolved_player_id)` — Find Friends friend card declaration
+  - `is_resolved` property
+- `src/shengji/models/game_state.py`:
+  - `GamePhase` enum: `WAITING → DEALING → BIDDING_AFTER_DEAL → BOTTOM_EXCHANGE → [FRIEND_DECLARATION →] PLAYING → SCORING → ROUND_OVER → [DEALING | GAME_OVER]`
+  - `GameState` — authoritative state; all fields per spec
+  - `transition_to(phase)` — enforces valid transitions, raises `ValueError` on illegal moves
+  - `to_player_view(player_id)` — hides other players' hands; hides bottom deck except to round leader during `BOTTOM_EXCHANGE`
+  - `to_superuser_view()` — full visibility: all hands, bottom deck, draw pile size, tricks won, friend declarations
+- **53 new tests — all passing** (`test_player.py`, `test_game_state.py`)
+- **164 total tests passing**
+
+**Next steps (Session 5):**
+- M4: `src/shengji/engine/engine.py` — `GameEngine` with dealing loop, bidding, bottom exchange, trick play, scoring
+- M4: `src/shengji/engine/tricks.py` — trick resolution, `get_legal_plays`, throw validation
+- M4: `src/shengji/engine/scoring.py` — point counting, bottom deck multiplier, rank advancement
+
+---
+
 ## Session 2 — M0 + M1 Implementation
 
 **Status:** M0 and M1 complete. PR #1 merged. Ready to implement M2 (TrumpContext + card ordering).

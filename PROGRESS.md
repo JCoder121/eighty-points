@@ -4,7 +4,9 @@ Newest entries at the top.
 
 ---
 
-## Session 5 — M4 Game Engine (in progress)
+## Session 5 — M4 Game Engine
+
+**Status:** M4 complete. PR open for review. Ready to implement M5 (Mode Strategies) once approved.
 
 **Branch:** `feat/m4-game-engine`
 
@@ -13,6 +15,13 @@ Newest entries at the top.
 - `deal_next_card()`: routes cards counter-clockwise from player after round leader; transitions to `BIDDING_AFTER_DEAL` when draw pile empties
 - `deal_all_cards()`: async loop with configurable delay and per-card callback
 - 29 tests in `test_dealing.py`
+
+### M4.6 — Scoring + `end_round()` (committed)
+- `scoring.py`:
+  - `count_attacking_points(tricks_won, attacker_ids, bottom_deck, last_trick_winner_id, last_trick_cards, ctx)`: sums attacker trick points; applies `2 × largest_component_length` multiplier to bottom-deck points when attackers win the last trick
+  - `compute_rank_advancement(attacking_points, n_decks)`: full 7-band threshold table — 0 → defending+3; 1-99n → defending+2; 100n-199n → defending+1; 200n-299n → attacking+0; 300n-399n → attacking+1; 400n-499n → attacking+2; 500n+ → attacking+3
+- `end_round()` in engine: validates SCORING phase; delegates team lookup to `mode.get_attacker_ids()`; counts points; calls `compute_rank_advancement`; advances winning team ranks; detects game-over (defender at ACE after successful defense); calls `mode.get_next_leader()`; increments round number; transitions to `ROUND_OVER` or `GAME_OVER`
+- 30 tests in `test_scoring.py` covering all 7 threshold boundaries, bottom multiplier, tractor multiplier, rank clamping, and game-over detection — **328 total passing**
 
 ### M4.5 — `play_cards()` + full trick lifecycle (committed)
 - `play_cards(player_id, cards)`: validates phase/turn/card-ownership; leader validates throw; follower validated against `get_legal_plays()`; resolves trick on 4th play; winner gets trick, leads next; round-over detected when all hands empty → transitions to `SCORING`

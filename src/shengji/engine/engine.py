@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Callable, Awaitable
 
+from shengji.engine.scoring import count_attacking_points, compute_rank_advancement
 from shengji.engine.tricks import (
     get_legal_plays,
     resolve_trick_winner,
@@ -618,6 +619,104 @@ class GameEngine:
             "trick_complete": True,
             "trick_winner": winner_id,
             "round_over": round_over,
+        }
+
+    # ------------------------------------------------------------------
+    # Round resolution
+    # ------------------------------------------------------------------
+
+    def end_round(self) -> dict:
+        """Score the round and advance ranks.
+
+        Must be called in the SCORING phase (after all tricks are played).
+
+        Steps
+        -----
+        1. Determine attacking team from mode strategy.
+        2. Count attacking points (with bottom-deck multiplier if applicable).
+        3. Determine rank advancement winner and step count.
+        4. Advance the winning team's ranks (clamped at ACE).
+        5. Check for game over (any player at ACE whose team just defended).
+        6. Delegate next-leader selection to mode strategy.
+        7. Transition to ROUND_OVER (caller decides GAME_OVER vs next DEALING).
+
+        Returns
+        -------
+        dict with keys:
+          "attacking_points": int
+          "winner": "attacking" | "defending"
+          "steps": int
+          "game_over": bool
+          "next_round_leader_id": str | None
+        """
+        state = self.state
+        if state.phase != GamePhase.SCORING:
+            raise ValueError(
+                f"end_round() called in phase {state.phase.value!r}; "
+                "expected SCORING."
+            )
+        if state.trump_context is None:
+            raise ValueError("Cannot score a round with no trump context.")
+
+        ctx = state.trump_context
+
+        # Determine teams from mode strategy
+        attacker_ids = self.mode.get_attacker_ids(state)
+        defender_ids = {p.id for p in state.players} - attacker_ids
+
+        # Identify last trick
+        last_trick_winner_id = state.current_leader_id  # winner of last trick
+        all_tricks_flat: list[tuple[str, list[list[Card]]]] = list(state.tricks_won.items())
+        last_trick_cards: list[Card] = []
+        # Find the last trick cards by looking at the trick won by last_trick_winner_id
+        # The last trick won is the most recent entry for that player
+        if state.tricks_won.get(last_trick_winner_id):
+            last_trick_cards = state.tricks_won[last_trick_winner_id][-1]
+
+        # Count attacking points
+        attacking_pts = count_attacking_points(
+            tricks_won=state.tricks_won,
+            attacker_ids=attacker_ids,
+            bottom_deck=state.bottom_deck,
+            last_trick_winner_id=last_trick_winner_id,
+            last_trick_cards=last_trick_cards,
+            ctx=ctx,
+        )
+        state.attacking_points = attacking_pts
+
+        # Compute advancement
+        winner, steps = compute_rank_advancement(attacking_pts)
+
+        # Advance winning team's ranks
+        winning_ids = attacker_ids if winner == "attacking" else defender_ids
+        for pid in winning_ids:
+            self._player(pid).advance_rank(steps)
+
+        # Check game over: any defender at ACE and defending team defended successfully
+        # (i.e. winner == "defending" or winner == "attacking" with steps == 0)
+        game_over = False
+        if winner != "attacking" or steps == 0:
+            # Defending team held — check if any defender is at ACE
+            for pid in defender_ids:
+                if self._player(pid).is_at_max_rank:
+                    game_over = True
+                    break
+
+        # Determine next round leader
+        next_leader_id = self.mode.get_next_leader(state, winner)
+        state.round_leader_id = next_leader_id
+        state.round_number += 1
+
+        state.transition_to(GamePhase.ROUND_OVER)
+        if game_over:
+            state.transition_to(GamePhase.GAME_OVER)
+
+        return {
+            "attacking_points": attacking_pts,
+            "winner": winner,
+            "steps": steps,
+            "game_over": game_over,
+            "next_round_leader_id": next_leader_id if not game_over else None,
         }
 
     async def deal_all_cards(

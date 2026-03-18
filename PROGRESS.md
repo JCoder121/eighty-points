@@ -4,6 +4,26 @@ Newest entries at the top.
 
 ---
 
+## Session 5 — M4 Game Engine (in progress)
+
+**Branch:** `feat/m4-game-engine`
+
+### M4.1 — Engine skeleton + dealing (committed)
+- `start_dealing()`: validates mode/phase, shuffles new deck, clears per-round state, transitions to `DEALING`
+- `deal_next_card()`: routes cards counter-clockwise from player after round leader; transitions to `BIDDING_AFTER_DEAL` when draw pile empties
+- `deal_all_cards()`: async loop with configurable delay and per-card callback
+- 29 tests in `test_dealing.py`
+
+### M4.2 — Bidding (committed)
+- `place_bid(player_id, cards)`: validates phase, card ownership, bid legality (trump rank, joker pair rules), and overtaking strength. Updates `state.bids` and live `trump_context`.
+- `close_bidding()`: finalises bidding — re-deals on no bids (clears hands, calls `start_dealing`); otherwise promotes winning bidder to `round_leader_id`, locks trump context, transitions to `BOTTOM_EXCHANGE`.
+- Static helpers: `_bid_strength()`, `_validate_bid_cards()`, `_can_overtake()`
+- Bid strength tiers: suited single (1) < suited pair (2) < small joker pair (3) < big joker pair (4)
+- Suited pairs cannot overtake other suited pairs; same player cannot re-bid a single with a different suit
+- 44 tests in `test_bidding.py` — 237 total passing
+
+---
+
 ## Session 4 — M2 + M3 Implementation
 
 **Status:** M2 and M3 complete. Ready to implement M4 (Game Engine).

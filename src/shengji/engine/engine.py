@@ -18,10 +18,16 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Callable, Awaitable
 
+from shengji.engine.tricks import (
+    get_legal_plays,
+    resolve_trick_winner,
+    validate_throw,
+)
 from shengji.models.bid import Bid
 from shengji.models.deck import Deck, NUM_PLAYERS, BOTTOM_SIZE, HAND_SIZE
 from shengji.models.game_state import GamePhase, GameState
 from shengji.models.card import Card, Rank, Suit
+from shengji.models.groups import classify_play, Throw
 from shengji.models.trump import TrumpContext
 
 if TYPE_CHECKING:
@@ -36,6 +42,15 @@ DEAL_DELAY_SECONDS: float = 0.5
 
 def _event(kind: str, **data) -> dict:
     return {"event": kind, **data}
+
+
+def _cards_match_any(cards: list[Card], options: list[list[Card]]) -> bool:
+    """Return True if *cards* equals any option as a multiset."""
+    def _key(lst: list[Card]) -> list:
+        return sorted(repr(c) for c in lst)
+
+    cards_key = _key(cards)
+    return any(_key(opt) == cards_key for opt in options)
 
 
 # ---------------------------------------------------------------------------
@@ -439,6 +454,7 @@ class GameEngine:
             state.transition_to(GamePhase.FRIEND_DECLARATION)
         else:
             state.transition_to(GamePhase.PLAYING)
+            state.current_turn_id = state.round_leader_id
 
     # ------------------------------------------------------------------
     # Friend declaration
@@ -479,6 +495,130 @@ class GameEngine:
         self.mode.validate_friend_declaration(state, declarations)
         state.friend_declarations = list(declarations)
         state.transition_to(GamePhase.PLAYING)
+        state.current_turn_id = state.round_leader_id
+
+    # ------------------------------------------------------------------
+    # Playing tricks
+    # ------------------------------------------------------------------
+
+    def play_cards(self, player_id: str, cards: list[Card]) -> dict:
+        """Play cards into the current trick.
+
+        Validates the play, removes cards from the player's hand, appends to
+        the current trick, and resolves the trick once all 4 players have
+        played.
+
+        Returns a result dict with keys:
+          "trick_complete": bool — True when all 4 players have played.
+          "trick_winner":   str | None — player_id of winner if trick complete.
+          "round_over":     bool — True when all 25 tricks have been played.
+
+        Raises
+        ------
+        ValueError
+            On wrong phase, out-of-turn play, cards not in hand, illegal
+            follow, or invalid throw.
+        """
+        state = self.state
+        if state.phase != GamePhase.PLAYING:
+            raise ValueError(
+                f"play_cards() called in phase {state.phase.value!r}; "
+                "expected PLAYING."
+            )
+
+        if player_id != state.current_turn_id:
+            raise ValueError(
+                f"It is not {player_id!r}'s turn; "
+                f"expected {state.current_turn_id!r}."
+            )
+
+        player = self._player(player_id)
+
+        # Validate cards are in hand
+        hand_copy = list(player.hand)
+        for card in cards:
+            if card not in hand_copy:
+                raise ValueError(
+                    f"Card {card!r} is not in {player_id!r}'s hand."
+                )
+            hand_copy.remove(card)
+
+        ctx = state.trump_context
+        if ctx is None:
+            raise ValueError("Cannot play cards: trump context is not set.")
+
+        is_leader = len(state.current_trick) == 0
+
+        if is_leader:
+            # Leader can play any valid format
+            led_fmt = classify_play(cards, ctx)
+
+            # If it's a throw, validate it
+            if isinstance(led_fmt, Throw):
+                all_hands = {p.id: p.hand for p in state.players}
+                if not validate_throw(cards, player_id, all_hands, ctx):
+                    raise ValueError(
+                        "Invalid throw: at least one component can be beaten "
+                        "by an opponent's card of the same suit."
+                    )
+
+            state._led_format = led_fmt  # store for followers to check against
+            state._led_suit = ctx.effective_suit(cards[0])
+
+        else:
+            # Follower must adhere to following rules
+            led_fmt = getattr(state, "_led_format", None)
+            led_suit = getattr(state, "_led_suit", None)
+
+            if led_fmt is None or led_suit is None:
+                raise ValueError("Internal error: led format/suit not set.")
+
+            # Validate follow: get legal plays and ensure the chosen cards match
+            legal = get_legal_plays(player.hand, led_fmt, led_suit, ctx)
+            # A play is legal if it equals one of the legal options (as a multiset)
+            if not _cards_match_any(cards, legal):
+                raise ValueError(
+                    f"Illegal follow: {player_id!r} must play "
+                    f"{legal[0]!r} given the led format."
+                )
+
+        # Remove cards from hand
+        player.hand = hand_copy
+
+        # Append to current trick
+        state.current_trick.append((player_id, list(cards)))
+
+        # Advance turn
+        if len(state.current_trick) < NUM_PLAYERS:
+            state.current_turn_id = self._next_player_id(player_id)
+            return {"trick_complete": False, "trick_winner": None, "round_over": False}
+
+        # All 4 players have played — resolve the trick
+        led_suit = getattr(state, "_led_suit", ctx.effective_suit(state.current_trick[0][1][0]))
+        winner_id = resolve_trick_winner(state.current_trick, led_suit, ctx)
+
+        # Award the trick to the winner
+        trick_cards = [c for _, play in state.current_trick for c in play]
+        state.tricks_won[winner_id].append(trick_cards)
+
+        # Clear trick state
+        state.current_trick = []
+        state._led_format = None
+        state._led_suit = None
+        state.current_leader_id = winner_id
+        state.current_turn_id = winner_id
+        state.trick_number += 1
+
+        # Check if round is over (all hands empty)
+        round_over = all(len(p.hand) == 0 for p in state.players)
+        if round_over:
+            state.transition_to(GamePhase.SCORING)
+
+        return {
+            "trick_complete": True,
+            "trick_winner": winner_id,
+            "round_over": round_over,
+        }
 
     async def deal_all_cards(
         self,

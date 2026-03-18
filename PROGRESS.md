@@ -14,6 +14,13 @@ Newest entries at the top.
 - `deal_all_cards()`: async loop with configurable delay and per-card callback
 - 29 tests in `test_dealing.py`
 
+### M4.5 — `play_cards()` + full trick lifecycle (committed)
+- `play_cards(player_id, cards)`: validates phase/turn/card-ownership; leader validates throw; follower validated against `get_legal_plays()`; resolves trick on 4th play; winner gets trick, leads next; round-over detected when all hands empty → transitions to `SCORING`
+- Fixed: `current_turn_id` set to `round_leader_id` when entering PLAYING (from both `exchange_bottom` and `declare_friends`)
+- `_cards_match_any()` module helper for multiset comparison of played vs legal plays
+- Full-round simulation helper `_play_one_trick_auto()` uses `get_legal_plays()` for realistic follower responses
+- 16 tests in `test_game_loop.py` (preconditions, single trick, full 25-trick round with card accounting) — 298 total passing
+
 ### M4.4 — Trick logic (`tricks.py`) (committed)
 - `get_legal_plays(hand, led_format, led_suit, ctx)`: follower must match format to the best of their ability — exact match if enough suited cards, else all suited + fill with anything; degrades gracefully: tractor > pairs > singles
 - `validate_throw(throw_cards, thrower_id, all_hands, ctx)`: throw invalid if any opponent holds a same-suit non-trump card that beats any component

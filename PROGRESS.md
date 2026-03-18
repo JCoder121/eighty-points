@@ -14,6 +14,13 @@ Newest entries at the top.
 - `deal_all_cards()`: async loop with configurable delay and per-card callback
 - 29 tests in `test_dealing.py`
 
+### M4.4 — Trick logic (`tricks.py`) (committed)
+- `get_legal_plays(hand, led_format, led_suit, ctx)`: follower must match format to the best of their ability — exact match if enough suited cards, else all suited + fill with anything; degrades gracefully: tractor > pairs > singles
+- `validate_throw(throw_cards, thrower_id, all_hands, ctx)`: throw invalid if any opponent holds a same-suit non-trump card that beats any component
+- `resolve_trick_winner(trick, led_suit, ctx)`: off-suit plays ineligible to win; trump beats non-trump; highest card_order wins; first player wins ties
+- All 4 dynamic adjacency cases from spec tested (trump rank 4/9/3/2)
+- 28 tests in `test_tricks.py` — 282 total passing
+
 ### M4.3 — Bottom exchange + friend declaration (committed)
 - `exchange_bottom(player_id, cards_to_put_back)`: validates phase/player/count; leader picks up 8 bottom cards (33 total), buries 8, hand returns to 25; delegates phase transition to mode strategy (`FRIEND_DECLARATION` for Find Friends, `PLAYING` for Upgrade)
 - `declare_friends(player_id, declarations)`: validates phase/player, calls `mode.validate_friend_declaration()`, stores declarations, transitions to `PLAYING`

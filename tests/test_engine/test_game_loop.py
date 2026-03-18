@@ -20,11 +20,17 @@ from shengji.models.trump import TrumpContext
 # ---------------------------------------------------------------------------
 
 class _UpgradeStub:
+    def assign_teams(self, state) -> None:
+        pass
+
     def needs_friend_declaration(self) -> bool:
         return False
 
     def validate_friend_declaration(self, state, declarations) -> None:
         raise RuntimeError("Not applicable")
+
+    def resolve_friend(self, state, player_id, card) -> None:
+        pass
 
 
 # ---------------------------------------------------------------------------

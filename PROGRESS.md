@@ -4,6 +4,49 @@ Newest entries at the top.
 
 ---
 
+## Session 6 — M5 Mode Strategies
+
+**Status:** M5 complete. 370 tests passing. PR open for review.
+
+**Branch:** `feat/m5-mode-strategies`
+
+### M5.1 — `ModeStrategy` abstract base class (committed)
+- `src/shengji/modes/base.py`:
+  - `assign_teams(state)` — abstract; sets `is_defending` + `team` on every player
+  - `get_attacker_ids(state)` — concrete default; reads `is_defending` flags
+  - `needs_friend_declaration()` — abstract
+  - `validate_friend_declaration(state, declarations)` — abstract
+  - `resolve_friend(state, player_id, card)` — abstract; called per card played
+  - `on_round_end(state, winner_team)` — abstract; updates team roles for next round
+  - `get_next_leader(state, winner_team)` — abstract; returns next round_leader_id
+
+### M5.2 — Engine integration (committed)
+- `close_bidding()`: calls `self.mode.assign_teams(state)` after bid winner determined
+- `play_cards()`: calls `self.mode.resolve_friend(state, player_id, card)` for each card played
+- `end_round()`: calls `self.mode.on_round_end(state, winner)` before `get_next_leader()`
+- Updated all 4 test stubs (`test_bidding`, `test_bottom_exchange`, `test_game_loop`, `test_scoring`) to include new no-op methods
+
+### M5.3 — `UpgradeStrategy` (committed)
+- `src/shengji/modes/upgrade.py`:
+  - `assign_teams`: seats 0,2 vs seats 1,3; leader's parity determines which pair defends
+  - `on_round_end`: flips all `is_defending` flags when attackers win; no-op when defenders win
+  - `get_next_leader`: counter-clockwise next player on winning team (uses updated `is_defending` after `on_round_end`)
+- 18 tests in `test_upgrade.py` covering all seat-parity assignments, role swaps, leader rotation
+
+### M5.4 — `FindFriendsStrategy` (committed)
+- `src/shengji/modes/find_friends.py`:
+  - `assign_teams`: leader defends alone; resets `_play_counts` for fresh round
+  - `validate_friend_declaration`: 1 friend for 4 players; rejects trump-rank and joker cards; leader declaring own card is allowed (1v3 edge case)
+  - `resolve_friend`: increments per-card play counter; triggers declaration when count matches ordinal; marks friend as `is_defending=True`; supports sequential ordinals on same card
+  - `on_round_end`: no-op (teams reset each round via `assign_teams`)
+  - `get_next_leader`: counter-clockwise from current leader on winning team
+- 24 tests in `test_find_friends.py` covering: leader-alone init, friend revelation at correct ordinal, sequential ordinals, leader-as-own-friend edge case, resolved declaration skipped, leader rotation
+
+### Pitfalls & Learnings (M5)
+- No pitfalls encountered during M5. The engine integration was clean because the stub design in M4 anticipated the ModeStrategy interface closely enough that only no-op method additions were needed in existing test stubs.
+
+---
+
 ## Session 5 — M4 Game Engine
 
 **Status:** M4 complete. PR open for review. Ready to implement M5 (Mode Strategies) once approved.

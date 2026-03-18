@@ -29,7 +29,8 @@ def _make_state(mode: str = "upgrade", leader_rank: Rank = Rank.TWO) -> GameStat
 
 
 class _StubStrategy:
-    pass
+    def assign_teams(self, state) -> None:
+        pass
 
 
 def _make_engine(state: GameState | None = None) -> GameEngine:

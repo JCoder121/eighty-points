@@ -18,6 +18,9 @@ from shengji.models.trump import TrumpContext
 
 class _UpgradeStub:
     """Stub for Upgrade mode: no friend declaration needed."""
+    def assign_teams(self, state) -> None:
+        pass
+
     def needs_friend_declaration(self) -> bool:
         return False
 
@@ -27,6 +30,9 @@ class _UpgradeStub:
 
 class _FindFriendsStub:
     """Stub for Find Friends mode: friend declaration required."""
+    def assign_teams(self, state) -> None:
+        pass
+
     def needs_friend_declaration(self) -> bool:
         return True
 

@@ -124,8 +124,22 @@ class GameEngine:
         state = self.state
         if state.mode is None:
             raise ValueError("Game mode must be set before dealing starts.")
-        if state.phase not in (GamePhase.WAITING, GamePhase.ROUND_OVER):
-            state.transition_to(GamePhase.DEALING)  # will raise if illegal
+
+        # Phase handling:
+        #   WAITING       → first round; transition to DEALING.
+        #   ROUND_OVER    → subsequent round; transition to DEALING.
+        #   DEALING       → re-deal after no-bid; already in DEALING (close_bidding
+        #                   did the transition), so no further transition needed.
+        #   anything else → reject.
+        if state.phase == GamePhase.DEALING:
+            pass  # re-deal: already in DEALING
+        elif state.phase in (GamePhase.WAITING, GamePhase.ROUND_OVER):
+            state.transition_to(GamePhase.DEALING)
+        else:
+            raise ValueError(
+                f"Cannot start dealing from phase {state.phase.value!r}. "
+                "Expected WAITING, ROUND_OVER, or DEALING (re-deal)."
+            )
 
         deck = Deck()
         draw_pile, bottom_deck = deck.prepare_deal()
@@ -143,8 +157,6 @@ class GameEngine:
         state.trick_number = 1
         state.current_leader_id = state.round_leader_id
         state.current_turn_id = ""  # not used during dealing
-
-        state.transition_to(GamePhase.DEALING)
 
     def deal_next_card(self) -> tuple[str, Card] | None:
         """Pop one card from the draw pile and add it to the next player's hand.
@@ -360,18 +372,11 @@ class GameEngine:
 
         if not state.bids:
             # Nobody bid — re-deal this round.
-            # Clear hands before re-dealing.
             for p in state.players:
                 p.hand = []
-            # Manually set phase back so start_dealing can transition ROUND_OVER→DEALING
-            # The simplest approach: reset to WAITING temporarily then call start_dealing.
-            # But WAITING→DEALING is valid. We need BIDDING_AFTER_DEAL→DEALING.
-            # The transition table allows BIDDING_AFTER_DEAL→DEALING (re-deal case).
+            # BIDDING_AFTER_DEAL → DEALING is a valid transition (re-deal case).
+            # start_dealing() also accepts DEALING as its entry phase now.
             state.transition_to(GamePhase.DEALING)
-            # Now reset draw pile / bottom (start_dealing will re-shuffle)
-            # To trigger start_dealing from DEALING we need to be in WAITING or ROUND_OVER.
-            # Re-set phase to allow start_dealing's guard to pass:
-            state.phase = GamePhase.ROUND_OVER  # transient — start_dealing accepts this
             self.start_dealing()
             return
 

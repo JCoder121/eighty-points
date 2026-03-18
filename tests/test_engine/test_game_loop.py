@@ -111,9 +111,13 @@ class TestSingleTrick:
         self.engine.state.trump_context = ctx
 
     def test_leader_plays_reduces_hand(self):
-        card = self.engine._player("p0").hand[0]
+        p0_hand = self.engine._player("p0").hand
+        card = p0_hand[0]
+        count_before = p0_hand.count(card)
         self.engine.play_cards("p0", [card])
-        assert card not in self.engine._player("p0").hand
+        count_after = self.engine._player("p0").hand.count(card)
+        # Exactly one copy removed (duplicates possible in 2-deck game)
+        assert count_after == count_before - 1
         assert len(self.engine._player("p0").hand) == HAND_SIZE - 1
 
     def test_trick_appended(self):

@@ -14,6 +14,11 @@ Newest entries at the top.
 - `deal_all_cards()`: async loop with configurable delay and per-card callback
 - 29 tests in `test_dealing.py`
 
+### M4.3 — Bottom exchange + friend declaration (committed)
+- `exchange_bottom(player_id, cards_to_put_back)`: validates phase/player/count; leader picks up 8 bottom cards (33 total), buries 8, hand returns to 25; delegates phase transition to mode strategy (`FRIEND_DECLARATION` for Find Friends, `PLAYING` for Upgrade)
+- `declare_friends(player_id, declarations)`: validates phase/player, calls `mode.validate_friend_declaration()`, stores declarations, transitions to `PLAYING`
+- 17 tests in `test_bottom_exchange.py` — 254 total passing
+
 ### M4.2 — Bidding (committed)
 - `place_bid(player_id, cards)`: validates phase, card ownership, bid legality (trump rank, joker pair rules), and overtaking strength. Updates `state.bids` and live `trump_context`.
 - `close_bidding()`: finalises bidding — re-deals on no bids (clears hands, calls `start_dealing`); otherwise promotes winning bidder to `round_leader_id`, locks trump context, transitions to `BOTTOM_EXCHANGE`.

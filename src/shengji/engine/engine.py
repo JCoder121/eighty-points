@@ -366,6 +366,120 @@ class GameEngine:
         state.trump_context = winning_bid.resulting_trump
         state.transition_to(GamePhase.BOTTOM_EXCHANGE)
 
+    # ------------------------------------------------------------------
+    # Bottom exchange
+    # ------------------------------------------------------------------
+
+    def exchange_bottom(self, player_id: str, cards_to_put_back: list[Card]) -> None:
+        """The bid winner picks up the 8 bottom cards and buries 8 of their own.
+
+        Flow:
+          1. Add all 8 bottom cards to the round leader's hand (33 cards total).
+          2. Player chooses 8 cards to put back as the new bottom.
+          3. Remove those 8 from hand; hand returns to HAND_SIZE (25).
+          4. Transition to FRIEND_DECLARATION (Find Friends) or PLAYING (Upgrade).
+
+        Parameters
+        ----------
+        player_id:
+            Must equal state.round_leader_id.
+        cards_to_put_back:
+            Exactly 8 cards from the leader's post-pickup hand.
+
+        Raises
+        ------
+        ValueError
+            On wrong phase, wrong player, wrong card count, or player doesn't
+            hold a card they claim to bury.
+        """
+        state = self.state
+        if state.phase != GamePhase.BOTTOM_EXCHANGE:
+            raise ValueError(
+                f"exchange_bottom() called in phase {state.phase.value!r}; "
+                "expected BOTTOM_EXCHANGE."
+            )
+        if player_id != state.round_leader_id:
+            raise ValueError(
+                f"Only the round leader ({state.round_leader_id!r}) can exchange "
+                f"the bottom deck; got {player_id!r}."
+            )
+        if len(cards_to_put_back) != BOTTOM_SIZE:
+            raise ValueError(
+                f"Must put back exactly {BOTTOM_SIZE} cards; "
+                f"got {len(cards_to_put_back)}."
+            )
+
+        leader = self._player(player_id)
+
+        # Step 1: Pick up all bottom cards
+        leader.hand.extend(state.bottom_deck)
+        state.bottom_deck = []
+
+        # Step 2 & 3: Bury the chosen 8 cards
+        hand_copy = list(leader.hand)
+        for card in cards_to_put_back:
+            if card not in hand_copy:
+                raise ValueError(
+                    f"Card {card!r} is not in the leader's hand after picking up "
+                    "the bottom deck."
+                )
+            hand_copy.remove(card)
+
+        leader.hand = hand_copy
+        state.bottom_deck = list(cards_to_put_back)
+
+        # Sanity check
+        assert len(leader.hand) == HAND_SIZE, (
+            f"Leader hand size after exchange should be {HAND_SIZE}, "
+            f"got {len(leader.hand)}"
+        )
+
+        # Step 4: Phase transition
+        if self.mode.needs_friend_declaration():
+            state.transition_to(GamePhase.FRIEND_DECLARATION)
+        else:
+            state.transition_to(GamePhase.PLAYING)
+
+    # ------------------------------------------------------------------
+    # Friend declaration
+    # ------------------------------------------------------------------
+
+    def declare_friends(
+        self, player_id: str, declarations: list
+    ) -> None:
+        """Record friend declarations (Find Friends mode only).
+
+        Delegates validation to the mode strategy, stores the declarations,
+        and transitions to PLAYING.
+
+        Parameters
+        ----------
+        player_id:
+            Must equal state.round_leader_id (only the leader declares friends).
+        declarations:
+            List of FriendDeclaration objects; validated by mode strategy.
+
+        Raises
+        ------
+        ValueError
+            On wrong phase, wrong player, or strategy validation failure.
+        """
+        state = self.state
+        if state.phase != GamePhase.FRIEND_DECLARATION:
+            raise ValueError(
+                f"declare_friends() called in phase {state.phase.value!r}; "
+                "expected FRIEND_DECLARATION."
+            )
+        if player_id != state.round_leader_id:
+            raise ValueError(
+                f"Only the round leader ({state.round_leader_id!r}) can declare "
+                f"friends; got {player_id!r}."
+            )
+
+        self.mode.validate_friend_declaration(state, declarations)
+        state.friend_declarations = list(declarations)
+        state.transition_to(GamePhase.PLAYING)
+
     async def deal_all_cards(
         self,
         on_card_dealt: Callable[[str, Card], Awaitable[None]] | None = None,

@@ -4,6 +4,50 @@ Newest entries at the top.
 
 ---
 
+## Session 7 — M6 Superuser Mode
+
+**Status:** M6 complete. 436 tests passing. PR open for review.
+
+**Branch:** `feat/m6-superuser`
+
+### M6.1 — `inspector.py` — read-only inspection (committed)
+- `get_full_state(state)` — delegates to `state.to_superuser_view()`
+- `validate_state(state) -> list[str]` — returns violation strings (empty = clean):
+  - Total card count = 108 (skipped in WAITING)
+  - No card appears more than 2 times (2-deck limit)
+  - `trump_context` required in BOTTOM_EXCHANGE, FRIEND_DECLARATION, PLAYING, SCORING, ROUND_OVER
+  - No player hand exceeds HAND_SIZE (25)
+  - `round_leader_id` and `current_turn_id` (in PLAYING) must reference valid players
+  - `attacking_points` must be ≥ 0
+- 20 tests in `test_inspector.py`
+
+### M6.2 — `mutator.py` — state mutations (committed)
+- `set_hand(state, player_id, cards)` — replaces player's hand; returns validation warnings
+- `set_bottom(state, cards)` — replaces bottom deck; returns warnings
+- `set_points(state, attacking_points)` — overrides attacking_points; returns warnings
+- `force_phase(state, phase)` — bypasses transition graph, sets phase directly; returns warnings
+- `deal_specific_hands(state, hands, bottom)` — deterministic card distribution; clears draw_pile and tricks; returns warnings
+- Each mutation is non-fatal: violations returned as warnings, not raised
+- 22 tests in `test_mutator.py` including end-to-end "deal then play" integration
+
+### M6.3 — `api.py` — FastAPI router (committed)
+- `SuperuserRoom` dataclass: `room_id`, `game_master_id`, `game_state`, `superuser_enabled`
+- Module-level `_rooms` dict; injectable via `create_router(rooms)` for test isolation
+- `POST /superuser/enable/{room_id}` — sets `superuser_enabled=True`; game master only; idempotent
+- `GET /superuser/state/{room_id}` — full state (all hands visible)
+- `POST /superuser/validate/{room_id}` — returns `{valid, violations}`
+- `POST /superuser/set-hand/{room_id}` — body: `{player_id, cards}`
+- `POST /superuser/set-points/{room_id}` — body: `{attacking_points}`
+- `POST /superuser/force-phase/{room_id}` — body: `{phase}`; 400 on unknown phase
+- `POST /superuser/deal-specific/{room_id}` — body: `{hands, bottom}`
+- Access control: all endpoints except enable require `superuser_enabled=True`; `X-Player-Id` header must match `game_master_id`; 403 otherwise
+- 24 tests in `test_api.py` covering: enable flow, idempotency, non-GM rejection, not-enabled rejection, all mutation endpoints, unknown room 404
+
+### Pitfalls & Learnings (M6)
+- No pitfalls during M6. All 66 new tests passed first run.
+
+---
+
 ## Session 6 — M5 Mode Strategies
 
 **Status:** M5 complete. 370 tests passing. PR open for review.

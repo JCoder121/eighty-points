@@ -4,6 +4,74 @@ Newest entries at the top.
 
 ---
 
+## Session 8 — M7 Networking & Room Management
+
+**Status:** M7 complete. 499 tests passing. PR open for review.
+
+**Branch:** `feat/m7-networking`
+
+### M7.1 — `room.py` + `test_room.py` (committed)
+- `Room` dataclass: `room_id`, `game_master_id`, `game_state`, `engine`, `connections`, `superuser_enabled`, `passed_in_bidding`
+- `RoomManager`: `create_room`, `join_room`, `get_room`, `remove_room`, `all_room_ids`
+- 6-char alphanumeric room codes; 12-char lowercase+digits player IDs
+- 25 tests covering create/join/lifecycle/defaults
+
+### M7.2 — `handler.py` — WebSocket message dispatch (committed)
+- `compute_available_bids(player, trump_rank, current_bid)` — bid options per player hand
+- Broadcast helpers: `broadcast_all`, `send_to`, `send_error`, `broadcast_game_states`, `broadcast_room_update`
+- `start_and_deal(room, manager, deal_delay)` — asyncio task; creates engine, runs deal loop with callbacks
+- `handle_round_end(room, manager, deal_delay)` — score, next round or game_over
+- `abort_room(room, manager, reason)` — send game_aborted to all, clean up
+- `handle_message(room, player_id, data, manager, deal_delay)` — dispatches 8 action types: `select_mode`, `bid`, `pass_bid`, `close_bidding`, `exchange_bottom`, `declare_friends`, `play_cards`, `validate_play`
+- `handle_connection(ws, room_id, player_id, manager, deal_delay)` — full WebSocket lifecycle
+- Auto-close bidding: `passed_in_bidding` set resets on each new bid; when all NUM_PLAYERS pass, `close_bidding()` fires automatically
+
+### M7.3 — `app.py` + `test_app.py` — REST endpoints + superuser adapter (committed)
+- `create_app(manager, deal_delay, mount_static)` factory for test isolation
+- Routes: `GET /health`, `POST /rooms`, `POST /rooms/{room_id}/join`, `WS /ws/{room_id}/{player_id}`
+- `_LiveSuperuserRoom` proxy: forwards `superuser_enabled` setter to the live `Room` (the enable endpoint mutates the returned object; a plain copy would discard the write)
+- `_SuperuserRoomAdapter(dict)`: wraps `RoomManager` as a dict for the M6 superuser router; `get()` returns `_LiveSuperuserRoom`
+- 15 REST tests covering health, room creation, join validation, superuser adapter
+
+### M7.4 — `test_websocket.py` — WebSocket integration tests (committed)
+- 23 tests covering: error cases, connection/lobby broadcasts, mode selection, dealing, bidding, disconnect/abort
+- `_setup_deal` helper: race-free 4-player setup (see Pitfall #2 below)
+- `_drain_until_phase` / `_next_of_type` helpers for message queue draining
+
+### Pitfalls & Learnings (M7)
+
+**Pitfall 1 — `_SuperuserRoomAdapter.__setitem__` never called**
+The M6 enable endpoint does `room.superuser_enabled = True` on the object returned by
+`rooms.get(room_id)`. First attempt returned a plain `SuperuserRoom` copy — mutations
+were discarded. Fix: `get()` now returns `_LiveSuperuserRoom`, a proxy with a
+`superuser_enabled` property setter that writes through to the actual `Room`.
+
+**Pitfall 2 — TestClient WebSocket race condition (double `start_and_deal`)**
+In Starlette's TestClient each WebSocket runs in its own OS thread with its own
+asyncio event loop. If all 4 players are connected *then* `select_mode` is sent:
+- LOOP 0 processes `select_mode`, sets `state.mode`, sees 4 players → schedules Task A
+- LOOP 3 (ws[3]'s `handle_connection`) runs its auto-start check concurrently and
+  also sees mode set + 4 players → schedules Task B
+
+Two deals run in parallel → 4 `bidding_after_deal` messages per player instead of 2.
+Subsequent assertions read the wrong message.
+
+Fix: send `select_mode` when only 1 player is connected (auto-start check fails: 1≠4).
+Connect players 1, 2, then player 3 last — `handle_connection` for player 3 sees
+4 players + mode set → fires exactly ONE auto-start. In all timing scenarios this
+produces exactly 2 `bidding_after_deal` messages (one from `on_card_dealt` after the
+last card, one from `start_and_deal`'s final `broadcast_game_states`).
+
+**Pitfall 3 — Two `bidding_after_deal` messages per deal**
+`start_and_deal` emits two `game_state(bidding_after_deal)` messages: (1) from the
+`on_card_dealt` callback after the last card triggers the phase transition, and (2)
+from the explicit `broadcast_game_states` at the end of the function. Tests must
+consume BOTH before issuing further actions (e.g. `close_bidding`). The `_setup_deal`
+helper does this: `_drain_until_phase(ws, "bidding_after_deal")` consumes #1;
+`ws.receive_json()` consumes #2.
+
+---
+
 ## Session 7 — M6 Superuser Mode
 
 **Status:** M6 complete. 436 tests passing. PR open for review.

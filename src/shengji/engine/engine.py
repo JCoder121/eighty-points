@@ -387,6 +387,9 @@ class GameEngine:
         state.trump_context = winning_bid.resulting_trump
         state.transition_to(GamePhase.BOTTOM_EXCHANGE)
 
+        # Assign teams now that the round leader (bid winner) is known.
+        self.mode.assign_teams(state)
+
     # ------------------------------------------------------------------
     # Bottom exchange
     # ------------------------------------------------------------------
@@ -591,6 +594,10 @@ class GameEngine:
         # Remove cards from hand
         player.hand = hand_copy
 
+        # Notify mode strategy of each card played (e.g. friend reveal in Find Friends).
+        for card in cards:
+            self.mode.resolve_friend(state, player_id, card)
+
         # Append to current trick
         state.current_trick.append((player_id, list(cards)))
 
@@ -706,6 +713,9 @@ class GameEngine:
                 if self._player(pid).is_at_max_rank:
                     game_over = True
                     break
+
+        # Let mode strategy update team roles for next round (e.g. swap defenders).
+        self.mode.on_round_end(state, winner)
 
         # Determine next round leader
         next_leader_id = self.mode.get_next_leader(state, winner)

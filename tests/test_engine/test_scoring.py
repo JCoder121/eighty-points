@@ -204,11 +204,20 @@ def _make_player(idx: int) -> Player:
 class _UpgradeStub:
     """Minimal upgrade stub: p0+p2 defend, p1+p3 attack."""
 
+    def assign_teams(self, state) -> None:
+        pass
+
     def needs_friend_declaration(self) -> bool:
         return False
 
     def validate_friend_declaration(self, state, declarations) -> None:
         raise RuntimeError("Not applicable")
+
+    def resolve_friend(self, state, player_id, card) -> None:
+        pass
+
+    def on_round_end(self, state, winner_team: str) -> None:
+        pass
 
     def get_attacker_ids(self, state: GameState) -> set[str]:
         return {"p1", "p3"}

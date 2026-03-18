@@ -4,6 +4,54 @@ Newest entries at the top.
 
 ---
 
+## Session 5 — M4 Game Engine
+
+**Status:** M4 complete. PR open for review. Ready to implement M5 (Mode Strategies) once approved.
+
+**Branch:** `feat/m4-game-engine`
+
+### M4.1 — Engine skeleton + dealing (committed)
+- `start_dealing()`: validates mode/phase, shuffles new deck, clears per-round state, transitions to `DEALING`
+- `deal_next_card()`: routes cards counter-clockwise from player after round leader; transitions to `BIDDING_AFTER_DEAL` when draw pile empties
+- `deal_all_cards()`: async loop with configurable delay and per-card callback
+- 29 tests in `test_dealing.py`
+
+### M4.6 — Scoring + `end_round()` (committed)
+- `scoring.py`:
+  - `count_attacking_points(tricks_won, attacker_ids, bottom_deck, last_trick_winner_id, last_trick_cards, ctx)`: sums attacker trick points; applies `2 × largest_component_length` multiplier to bottom-deck points when attackers win the last trick
+  - `compute_rank_advancement(attacking_points, n_decks)`: full 7-band threshold table — 0 → defending+3; 1-99n → defending+2; 100n-199n → defending+1; 200n-299n → attacking+0; 300n-399n → attacking+1; 400n-499n → attacking+2; 500n+ → attacking+3
+- `end_round()` in engine: validates SCORING phase; delegates team lookup to `mode.get_attacker_ids()`; counts points; calls `compute_rank_advancement`; advances winning team ranks; detects game-over (defender at ACE after successful defense); calls `mode.get_next_leader()`; increments round number; transitions to `ROUND_OVER` or `GAME_OVER`
+- 30 tests in `test_scoring.py` covering all 7 threshold boundaries, bottom multiplier, tractor multiplier, rank clamping, and game-over detection — **328 total passing**
+
+### M4.5 — `play_cards()` + full trick lifecycle (committed)
+- `play_cards(player_id, cards)`: validates phase/turn/card-ownership; leader validates throw; follower validated against `get_legal_plays()`; resolves trick on 4th play; winner gets trick, leads next; round-over detected when all hands empty → transitions to `SCORING`
+- Fixed: `current_turn_id` set to `round_leader_id` when entering PLAYING (from both `exchange_bottom` and `declare_friends`)
+- `_cards_match_any()` module helper for multiset comparison of played vs legal plays
+- Full-round simulation helper `_play_one_trick_auto()` uses `get_legal_plays()` for realistic follower responses
+- 16 tests in `test_game_loop.py` (preconditions, single trick, full 25-trick round with card accounting) — 298 total passing
+
+### M4.4 — Trick logic (`tricks.py`) (committed)
+- `get_legal_plays(hand, led_format, led_suit, ctx)`: follower must match format to the best of their ability — exact match if enough suited cards, else all suited + fill with anything; degrades gracefully: tractor > pairs > singles
+- `validate_throw(throw_cards, thrower_id, all_hands, ctx)`: throw invalid if any opponent holds a same-suit non-trump card that beats any component
+- `resolve_trick_winner(trick, led_suit, ctx)`: off-suit plays ineligible to win; trump beats non-trump; highest card_order wins; first player wins ties
+- All 4 dynamic adjacency cases from spec tested (trump rank 4/9/3/2)
+- 28 tests in `test_tricks.py` — 282 total passing
+
+### M4.3 — Bottom exchange + friend declaration (committed)
+- `exchange_bottom(player_id, cards_to_put_back)`: validates phase/player/count; leader picks up 8 bottom cards (33 total), buries 8, hand returns to 25; delegates phase transition to mode strategy (`FRIEND_DECLARATION` for Find Friends, `PLAYING` for Upgrade)
+- `declare_friends(player_id, declarations)`: validates phase/player, calls `mode.validate_friend_declaration()`, stores declarations, transitions to `PLAYING`
+- 17 tests in `test_bottom_exchange.py` — 254 total passing
+
+### M4.2 — Bidding (committed)
+- `place_bid(player_id, cards)`: validates phase, card ownership, bid legality (trump rank, joker pair rules), and overtaking strength. Updates `state.bids` and live `trump_context`.
+- `close_bidding()`: finalises bidding — re-deals on no bids (clears hands, calls `start_dealing`); otherwise promotes winning bidder to `round_leader_id`, locks trump context, transitions to `BOTTOM_EXCHANGE`.
+- Static helpers: `_bid_strength()`, `_validate_bid_cards()`, `_can_overtake()`
+- Bid strength tiers: suited single (1) < suited pair (2) < small joker pair (3) < big joker pair (4)
+- Suited pairs cannot overtake other suited pairs; same player cannot re-bid a single with a different suit
+- 44 tests in `test_bidding.py` — 237 total passing
+
+---
+
 ## Session 4 — M2 + M3 Implementation
 
 **Status:** M2 and M3 complete. Ready to implement M4 (Game Engine).

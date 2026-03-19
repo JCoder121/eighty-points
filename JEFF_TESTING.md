@@ -2,6 +2,42 @@
 
 ---
 
+## Important Notes
+
+### Mobile / cross-device experience is not designed for yet
+
+This game is intended to be played with friends across a mix of devices — phones, tablets,
+and laptops. The current frontend makes **no concessions for small screens or touch input**.
+This is a design decision that needs to be resolved before the game is shared with anyone.
+
+**What the current UI assumes:**
+- A reasonably wide screen (700 px+ for the hand area to spread out without wrapping awkwardly)
+- A mouse or trackpad for clicking small card elements (38 × 56 px each — tight on a phone touchscreen)
+- A keyboard is not required, but the card elements and buttons are sized for pointer devices
+
+**What happens on a phone today:**
+- The hand area wraps into multiple rows and may overflow or look cramped
+- Cards (38 × 56 px) are hard to tap accurately on a small touchscreen
+- The 3 × 3 trick grid shrinks but does not reflow — text may overlap
+- Bid buttons and the Pass button are usable but tightly spaced
+- There is no viewport scaling other than the `<meta name="viewport">` tag already present
+
+**Design options to consider:**
+
+| Option | Tradeoff |
+|---|---|
+| **Require laptop/desktop** | Simplest. Just tell your friends "use a computer." Eliminates the problem entirely for this version. |
+| **Responsive layout (CSS media queries)** | Moderate effort. Increase card sizes for touch, reflow the trick grid to vertical on narrow screens, make buttons finger-friendly (min 44 px tap targets per Apple/Google HIG). |
+| **Progressive Web App (PWA)** | Larger effort. Add a manifest + service worker so players can install the game to their phone home screen, giving a more native feel. Does not solve the layout problem on its own. |
+| **Separate mobile UI** | Most effort. A second simplified view tuned for small screens (e.g., scrollable hand, larger tap zones, collapsed trick area). |
+
+**Recommended path:** Make a deliberate choice before inviting players. If everyone can use
+a laptop for now, document that as the expectation and revisit responsiveness in a later
+milestone. If mobile support is required from day one, plan a CSS media-query pass before
+testing with real players.
+
+---
+
 ## Debugging
 
 ### After 4 players join, lobby shows "Game in progress..." and everything is stuck

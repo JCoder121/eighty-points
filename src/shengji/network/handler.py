@@ -325,22 +325,6 @@ async def handle_message(
                 if state.phase == GamePhase.DEALING:
                     asyncio.create_task(start_and_deal(room, manager, deal_delay))
 
-        elif action == "close_bidding":
-            # Game master manually closes bidding.
-            if player_id != room.game_master_id:
-                await send_error(room, player_id, "Only the game master can close bidding.")
-                return
-            if engine is None or state.phase not in (
-                GamePhase.BIDDING_AFTER_DEAL, GamePhase.DEALING
-            ):
-                await send_error(room, player_id, "Cannot close bidding now.")
-                return
-            engine.close_bidding()
-            room.passed_in_bidding.clear()
-            await broadcast_game_states(room)
-            if state.phase == GamePhase.DEALING:
-                asyncio.create_task(start_and_deal(room, manager, deal_delay))
-
         # ── Bottom exchange ───────────────────────────────────────────────
 
         elif action == "exchange_bottom":

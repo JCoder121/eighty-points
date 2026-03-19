@@ -4,6 +4,58 @@ Newest entries at the top.
 
 ---
 
+## Session 11 — Bug Fixes: Bidding Design, Mode Selector, Trump Highlighting, Trick Resolution
+
+**Status:** Complete. 512 tests passing.
+
+**Branch:** `fix/bidding-close-and-bugs`
+
+### Fix 1 — Remove manual close-bidding; all players must pass (backend + frontend)
+
+- Removed `close_bidding` action branch from `handler.py`. Bidding now
+  closes exclusively when all 4 players pass (`pass_bid` auto-close).
+- Removed "Close Bidding" button from `renderBidArea` in `app.js`.
+- Removed two now-invalid tests (`test_game_master_can_close_bidding`,
+  `test_non_gm_cannot_close_bidding`) from `test_websocket.py`.
+
+### Fix 2 — Mode selector shown only after all 4 players join (frontend)
+
+- `renderLobby` now hides the Upgrade / Find Friends buttons until
+  `n === 4`, preventing the game master from starting a game with
+  fewer than 4 players.
+
+### Fix 3 — Trump card highlighting throughout all play phases (frontend)
+
+- Added `isTrumpCard(card, trumpContext)` helper: returns true for
+  jokers, trump-rank cards (any suit), and trump-suit cards.
+- Non-bidding `renderHand` now applies `.trump-highlight` (gold border
+  + warm tint) to every trump card in hand for all post-bidding phases,
+  giving players a persistent visual reminder of which cards are trump.
+
+### Fix 4 — Own name larger on trick table (frontend)
+
+- `renderTrickArea` adds `is-self` CSS class to the local player's name
+  label (14 px, bold, white vs. 11 px grey for others). Makes it easy
+  to identify your own position when testing multiple windows.
+
+### Fix 5 — Degraded follows cannot win the trick (backend engine + tests)
+
+- **Bug:** A follower with no pair in the led suit was allowed to "win"
+  a pair-lead trick by playing two high singles (e.g., A♠ + K♠ beating
+  a Q♠Q♠ lead), violating the rule that a degraded response can never win.
+- **Fix:** Added `_format_can_beat_lead(play_fmt, led_fmt)` to `tricks.py`.
+  Updated `_play_strength` to classify the follower's play and return
+  `None` (ineligible) if the play's format cannot beat the led format.
+  Updated `resolve_trick_winner` to accept an optional `led_format`
+  parameter (auto-derived from the leader's cards if omitted, keeping
+  existing tests backward-compatible). Engine passes `state._led_format`
+  explicitly to `resolve_trick_winner`.
+- **Coverage:** A trump pair (or tractor) following a non-trump pair lead
+  is still eligible to win — the format check correctly allows it.
+- 5 new regression tests added to `test_tricks.py`.
+
+---
+
 ## Session 10 — Bug Fix: Bidding UX, Rules, and Follow-Play Validation
 
 **Status:** Complete. 509 tests passing.

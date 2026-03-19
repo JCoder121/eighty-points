@@ -391,44 +391,88 @@ def _extract_component_cards(
 # resolve_trick_winner
 # ---------------------------------------------------------------------------
 
+def _format_can_beat_lead(play_fmt: TrickFormat, led_fmt: TrickFormat) -> bool:
+    """Return True if a play of play_fmt is eligible to beat a lead of led_fmt.
+
+    A degraded follow (e.g., two singles played to follow a pair lead because
+    the player had no pair) cannot win the trick regardless of card strength.
+    Only a play that matches the led format — or a stronger format in trump —
+    can win.
+
+    Rules
+    -----
+    - Single lead:            any Single is eligible.
+    - IdenticalGroup(k) lead: IdenticalGroup(>=k) or any Tractor is eligible.
+    - Tractor(m, L) lead:     Tractor with multiplicity >= m and length >= L
+                              is eligible; pairs and singles are not.
+    - Throw lead:             eligibility is not restricted (complex case).
+    """
+    if isinstance(led_fmt, Single):
+        return isinstance(play_fmt, Single)
+    if isinstance(led_fmt, IdenticalGroup):
+        k = led_fmt.count
+        if isinstance(play_fmt, IdenticalGroup):
+            return play_fmt.count >= k
+        if isinstance(play_fmt, Tractor):
+            return True  # tractor contains pairs — can beat a pair lead
+        return False  # Single or Throw cannot beat a pair/triple lead
+    if isinstance(led_fmt, Tractor):
+        if isinstance(play_fmt, Tractor):
+            return (
+                play_fmt.multiplicity >= led_fmt.multiplicity
+                and play_fmt.length >= led_fmt.length
+            )
+        return False  # pairs and singles cannot beat a tractor lead
+    # Throw lead — don't restrict (existing behaviour preserved)
+    return True
+
+
 def resolve_trick_winner(
     trick: list[tuple[str, list[Card]]],
     led_suit: str,
     ctx: TrumpContext,
+    led_format: TrickFormat | None = None,
 ) -> str:
     """Return the player_id that wins the trick.
 
     Rules
     -----
-    1. Only plays that match the led suit (or trump) are eligible to win.
-       Off-suit plays that don't follow suit can never win.
-    2. Among eligible plays, trump beats non-trump.
-    3. Among plays of the same effective suit, the highest card (by
-       card_order) wins.
-    4. The strongest card is the highest card_order value in the play.
-       For multi-card plays (pairs, tractors) the winning "value" is the
-       single strongest card in that play.
-    5. On a tie (equal-value cards), the first player to play wins.
+    1. Only plays in the led suit or trump are eligible to win.
+       Off-suit plays can never win.
+    2. A follower's play must match the led format (or a stronger format in
+       the same suit / trump) to be eligible to win.  A degraded response
+       (e.g., two singles played to follow a pair lead because the player
+       had no pair) is ineligible to win even if the cards outrank the lead.
+    3. Among eligible plays, trump beats non-trump.
+    4. Among plays of the same effective suit, the highest card_order wins.
+       For multi-card plays the winning value is the single strongest card.
+    5. On a tie, the first player to play wins (leader wins ties).
 
     Parameters
     ----------
     trick:
         Ordered list of (player_id, cards_played) — index 0 is the leader.
     led_suit:
-        The effective suit of the lead (from ctx.effective_suit on the leader's cards).
+        Effective suit of the lead.
     ctx:
         Current TrumpContext.
+    led_format:
+        TrickFormat of the lead.  If omitted it is derived from the leader's
+        cards via classify_play (backward-compatible with existing tests).
     """
     if not trick:
         raise ValueError("Cannot resolve an empty trick.")
 
+    if led_format is None:
+        led_format = classify_play(trick[0][1], ctx)
+
     best_player_id = trick[0][0]
-    best_strength = _play_strength(trick[0][1], led_suit, ctx)
+    best_strength = _play_strength(trick[0][1], led_suit, led_format, ctx)
 
     for player_id, cards in trick[1:]:
-        strength = _play_strength(cards, led_suit, ctx)
+        strength = _play_strength(cards, led_suit, led_format, ctx)
         if strength is None:
-            continue  # off-suit, ineligible
+            continue  # ineligible (off-suit or degraded follow)
         if best_strength is None or strength > best_strength:
             best_player_id = player_id
             best_strength = strength
@@ -439,17 +483,22 @@ def resolve_trick_winner(
 def _play_strength(
     cards: list[Card],
     led_suit: str,
+    led_format: TrickFormat,
     ctx: TrumpContext,
 ) -> tuple[int, int] | None:
-    """Return the strength key of a play, or None if ineligible.
+    """Return the strength key of a play, or None if ineligible to win.
 
-    A play is eligible if any card in it matches the led_suit or is trump.
-    Strength is the highest card_order in the play.
+    A play is ineligible if:
+    - Its effective suit is neither the led suit nor trump, OR
+    - Its classified format cannot beat the led format (degraded response).
     """
-    play_suit = ctx.effective_suit(cards[0])  # all cards in a play share the led suit if following correctly
+    play_suit = ctx.effective_suit(cards[0])
     if play_suit != led_suit and play_suit != "trump" and led_suit != "trump":
-        # Off-suit and not trump — ineligible
+        return None  # off-suit, ineligible
+
+    # Degraded responses (e.g., two singles following a pair lead) cannot win.
+    play_fmt = classify_play(cards, ctx)
+    if not _format_can_beat_lead(play_fmt, led_format):
         return None
 
-    # Strength = highest card_order in the play
     return max(ctx.card_order(c) for c in cards)

@@ -608,7 +608,7 @@ class GameEngine:
 
         # All 4 players have played — resolve the trick
         led_suit = getattr(state, "_led_suit", ctx.effective_suit(state.current_trick[0][1][0]))
-        winner_id = resolve_trick_winner(state.current_trick, led_suit, ctx)
+        winner_id = resolve_trick_winner(state.current_trick, led_suit, ctx, state._led_format)
 
         # Award the trick to the winner
         trick_cards = [c for _, play in state.current_trick for c in play]

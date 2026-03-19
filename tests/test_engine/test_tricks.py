@@ -220,6 +220,69 @@ class TestResolveTrickWinnerMulti:
 
 
 # ---------------------------------------------------------------------------
+# resolve_trick_winner — degraded follow cannot win (pair lead rule)
+# ---------------------------------------------------------------------------
+
+class TestResolveTrickWinnerDegraded:
+    """Degraded responses (no matching format) must not win the trick.
+
+    Key rule: if a follower has no pair in the led suit they must play two
+    singles (a degraded response).  That degraded play CANNOT win the trick
+    even if the individual cards outrank the leader's pair.  The only play
+    that can beat a non-trump pair lead is a matching trump pair (or tractor).
+    """
+    ctx = _ctx()  # trump_rank=2, trump_suit=HEARTS; spades/diamonds are off-suit
+
+    def test_degraded_singles_cannot_beat_pair_leader(self):
+        """Follower plays two high singles (no pair available) — leader wins."""
+        trick = [
+            ("p0", [Q_S, Q_S]),   # leader: pair of queens
+            ("p1", [A_S, K_S]),   # follower: two singles (A higher than Q, but degraded)
+        ]
+        # p1 played two singles to follow a pair lead — degraded, cannot win
+        assert resolve_trick_winner(trick, "spades", self.ctx) == "p0"
+
+    def test_trump_pair_beats_non_trump_pair_lead(self):
+        """Follower plays trump pair — eligible and wins."""
+        trick = [
+            ("p0", [A_S, A_S]),   # leader: non-trump pair
+            ("p1", [K_H, K_H]),   # follower: trump pair (hearts are trump)
+        ]
+        assert resolve_trick_winner(trick, "spades", self.ctx) == "p1"
+
+    def test_degraded_trump_singles_cannot_beat_pair_leader(self):
+        """Follower runs out of spades, plays two different trump cards — still degraded."""
+        trick = [
+            ("p0", [A_S, A_S]),   # leader: non-trump pair
+            ("p1", [A_H, K_H]),   # follower: two trump singles (different ranks, degraded)
+        ]
+        # Two different trump cards = Throw([Single, Single]), not a pair → ineligible
+        assert resolve_trick_winner(trick, "spades", self.ctx) == "p0"
+
+    def test_four_player_trick_degraded_follower_does_not_steal_win(self):
+        """In a 4-player trick, a degraded follower in the middle does not win."""
+        trick = [
+            ("p0", [Q_S, Q_S]),   # leader: pair queens
+            ("p1", [A_S, K_S]),   # degraded (no spade pair)
+            ("p2", [J_S, J_S]),   # valid spade pair, but weaker than leader
+            ("p3", [T_S, N_S]),   # degraded
+        ]
+        # p0 led the strongest eligible pair; p1 and p3 are degraded; p2 has a
+        # weaker pair.  Leader should win.
+        assert resolve_trick_winner(trick, "spades", self.ctx) == "p0"
+
+    def test_four_player_trick_trump_pair_wins_over_degraded(self):
+        """Trump pair beats non-trump pair lead even with high degraded plays in between."""
+        trick = [
+            ("p0", [Q_S, Q_S]),   # leader: non-trump pair
+            ("p1", [A_S, K_S]),   # degraded (high cards but singles)
+            ("p2", [K_H, K_H]),   # trump pair — eligible and strong
+            ("p3", [A_S, J_S]),   # degraded
+        ]
+        assert resolve_trick_winner(trick, "spades", self.ctx) == "p2"
+
+
+# ---------------------------------------------------------------------------
 # validate_throw
 # ---------------------------------------------------------------------------
 

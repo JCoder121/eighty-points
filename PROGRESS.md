@@ -6,7 +6,7 @@ Newest entries at the top.
 
 ## Session 9 — M8 Frontend
 
-**Status:** In progress. 499 tests passing (no new backend tests for M8).
+**Status:** M8 complete. 499 tests passing (no new backend tests for M8 per spec).
 
 **Branch:** `feat/m8-frontend`
 
@@ -34,6 +34,31 @@ Newest entries at the top.
 - Trump info bar: derives display text from trump_context or defending players' rank
 - Overlay: showOverlay / hideOverlay; "OK" button returns to landing, resets all state
 - Room code click-to-copy (clipboard API)
+
+### Pitfalls & Learnings (M8)
+
+**Pitfall 1 — innerHTML+= destroys dynamically appended children**
+In `renderFriendDeclaration`, using `row.innerHTML += "<label>...</label>"` after
+`row.appendChild(selectEl)` resets the DOM, destroying the appended `<select>` element.
+Fix: use `document.createElement("label")` + `appendChild` exclusively; never mix
+`innerHTML +=` with `appendChild` on the same element.
+
+**Pitfall 2 — Bottom exchange UI: leader sees 25 cards, not 33**
+The engine adds bottom deck cards to the hand INSIDE `exchange_bottom()` (atomically
+on the server), so the leader's `game_state.players[i].hand` has only 25 cards during
+BOTTOM_EXCHANGE phase. The 8 bottom cards are in `gs.bottom_deck` (visible only to
+the leader). The UI must explicitly combine hand + bottom_deck to show 33 cards and
+allow selection from both pools. Card keys use `"hand:N"` / `"bot:N"` to track source.
+
+**Pitfall 3 — round_leader_id not in to_player_view**
+`round_leader_id` is only in `to_superuser_view`, not `to_player_view`. During
+FRIEND_DECLARATION phase the frontend must detect the leader via `current_leader_id`
+(which equals `round_leader_id` from the start of dealing until PLAYING begins).
+
+**Pitfall 4 — Selecting indices shift when hand changes**
+If `S.selectedIndices` (now `selectedKeys`) is not cleared on every game_state update,
+stale indices can point to wrong cards after the hand array changes (e.g., a card
+is dealt or played). The spec mandates clearing selection on every `game_state` update.
 
 ### M8.3 — `app.js` — Game screen + Dealing + Bidding + Playing (committed)
 - Game phase transitions: shows game screen once DEALING begins

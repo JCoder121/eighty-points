@@ -257,20 +257,20 @@ class GameEngine:
         """Return True if the proposed bid legally supersedes *current_bid*.
 
         Overtaking rules (strength = 1 < 2 < 3 < 4):
-          • No current bid       → always valid.
-          • Strictly stronger    → valid.
-          • Same strength (==1)  → valid only when a *different* player bids.
-          • Suited pair (2) vs suited pair (2) → NEVER valid (equal strength, no suit rank).
+          • No current bid    → always valid.
+          • Strictly stronger → valid (any player, any suit).
+          • Same strength     → NEVER valid (a single cannot beat another single;
+                                a suited pair cannot beat another suited pair).
+
+        Implication: to overtake an existing single bid, you must hold a pair or
+        better.  To raise your own single to a pair, that is strength 2 > 1 and
+        is already covered by the "strictly stronger" rule.
         """
         if current_bid is None:
             return True
         new_str = GameEngine._bid_strength(new_cards)
         cur_str = GameEngine._bid_strength(current_bid.cards)
-        if new_str > cur_str:
-            return True
-        if new_str == cur_str == 1 and new_player_id != current_bid.player_id:
-            return True
-        return False
+        return new_str > cur_str
 
     # ------------------------------------------------------------------
     # Bidding

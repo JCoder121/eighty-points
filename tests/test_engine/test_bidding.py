@@ -151,9 +151,10 @@ class TestCanOvertake:
     def test_no_current_bid_always_valid(self):
         assert GameEngine._can_overtake([_card(Suit.HEARTS, Rank.TWO)], "p1", None)
 
-    def test_single_overtakes_single_different_player(self):
+    def test_single_cannot_overtake_single_different_player(self):
+        # A single bid never beats another single — you need a pair or higher.
         current = self._bid("p0", [_card(Suit.HEARTS, Rank.TWO)])
-        assert GameEngine._can_overtake([_card(Suit.SPADES, Rank.TWO)], "p1", current)
+        assert not GameEngine._can_overtake([_card(Suit.SPADES, Rank.TWO)], "p1", current)
 
     def test_single_cannot_overtake_own_single(self):
         current = self._bid("p0", [_card(Suit.HEARTS, Rank.TWO)])
@@ -227,15 +228,15 @@ class TestPlaceBid:
         with pytest.raises(ValueError, match="phase"):
             self.engine.place_bid("p1", [card])
 
-    def test_single_overtakes_single_different_player(self):
+    def test_single_cannot_overtake_single_different_player(self):
+        # Rule: a single never beats another single; you need a pair or better.
         c_hearts = _card(Suit.HEARTS, Rank.TWO)
         c_spades = _card(Suit.SPADES, Rank.TWO)
         self._give_cards("p1", [c_hearts])
         self._give_cards("p2", [c_spades])
         self.engine.place_bid("p1", [c_hearts])
-        self.engine.place_bid("p2", [c_spades])
-        assert len(self.engine.state.bids) == 2
-        assert self.engine.state.bids[-1].player_id == "p2"
+        with pytest.raises(ValueError, match="not strong enough"):
+            self.engine.place_bid("p2", [c_spades])
 
     def test_same_player_cannot_rebid_single(self):
         c1 = _card(Suit.HEARTS, Rank.TWO)
@@ -355,11 +356,13 @@ class TestCloseBidding:
         assert ctx.trump_suit == Suit.SPADES
 
     def test_last_bid_wins_when_multiple_bids(self):
+        # p1 bids a single; p2 overtakes with a pair (the minimum required
+        # to beat a single since same-strength bids cannot overtake).
         c1 = _card(Suit.HEARTS, Rank.TWO)
         c2 = _card(Suit.SPADES, Rank.TWO)
         self.engine._player("p1").hand = [c1]
-        self.engine._player("p2").hand = [c2]
+        self.engine._player("p2").hand = [c2, c2]
         self.engine.place_bid("p1", [c1])
-        self.engine.place_bid("p2", [c2])
+        self.engine.place_bid("p2", [c2, c2])
         self.engine.close_bidding()
         assert self.engine.state.round_leader_id == "p2"

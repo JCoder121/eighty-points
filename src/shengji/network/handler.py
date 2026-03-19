@@ -305,8 +305,10 @@ async def handle_message(
                 return
 
             engine.place_bid(player_id, bid_cards)
-            # Reset pass tracking so all must pass again to close bidding.
+            # Reset pass tracking.  Auto-count the bidder as passed (they have
+            # already committed; the remaining 3 players must pass to close).
             room.passed_in_bidding.clear()
+            room.passed_in_bidding.add(player_id)
             await broadcast_game_states(room)
 
         elif action == "pass_bid":

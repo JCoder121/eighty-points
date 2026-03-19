@@ -42,6 +42,32 @@ Four bugs/UX issues discovered during manual testing after M8.
   Players who have only passed (no bid) can still pass again after another
   player raises the bid.
 
+### Fix 5 — Highlighted trump-rank section during bidding; updated suit order (frontend)
+
+Two sub-changes:
+
+**5a — Suit order finalised as ♦♣♥♠ everywhere**
+Changed from `[♠♥♣♦]` (previous fix) to `[♦♣♥♠]` in both `cardSortKey` and bid
+buttons. Still alternates red/black. `cardSortKey` group numbering simplified:
+non-trump 0–3, trump-suit 4, all-trump-rank 5, jokers 6 (previously 7/8/9/10).
+
+**5b — All trump-rank cards now in one contiguous block during playing phase**
+Previously split across group 8 (off-suit trump rank) and group 9 (on-suit trump rank).
+Now both are group 5, sub-sorted: off-suit by suit order, on-suit last.
+
+**5c — Bidding-phase hand split**
+During `DEALING` and `BIDDING_AFTER_DEAL`, `renderHand` divides the hand into:
+- Main group: non-trump-rank, non-joker cards (sorted ♦♣♥♠ by rank)
+- Highlighted group: trump-rank (any suit) + jokers, sorted ♦♣♥♠ then SJ then BJ
+
+Highlighted cards shown below a gold dashed separator with the trump rank label.
+Cards rendered with `.trump-highlight` (gold border + warm tinted background + glow).
+Once bidding closes (phase → `BOTTOM_EXCHANGE`), the split collapses automatically
+back into a single merged hand.
+
+New helpers: `isJoker()`, `getTrumpRank()`, `sortBiddingMain()`, `sortBiddingHighlight()`.
+New CSS: `.hand-trump-sep`, `.card.trump-highlight`.
+
 ### Fix 4 — Pass button visual feedback (frontend)
 
 - Added `S.hasPassed` and `S.lastBidsCount` to app state.

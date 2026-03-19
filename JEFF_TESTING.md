@@ -94,6 +94,32 @@ it was impossible to tell if the press registered.
 changes to `"Passed ✓"` with a green border/text style, stays that way until the next bid
 resets it (server clears pass tracking on each bid, so everyone must pass again).
 
+**Issue 5 — Trump-rank cards not visually distinguished during bidding; suit order updated**
+
+The hand during dealing showed all cards in a flat row with no indication of which cards
+were relevant for bidding. Players had to mentally scan for their trump-rank cards.
+Additionally, the suit display order was revised a second time to match the user's
+preferred fixed ordering (♦ ♣ ♥ ♠), and all trump-rank cards are now grouped together
+in a single block after bidding ends.
+
+*Bidding/dealing phase (DEALING + BIDDING_AFTER_DEAL):*
+- Hand is split into two sections separated by a gold dashed line:
+  - **Main group** (left): non-trump-rank, non-joker cards, sorted ♦ ♣ ♥ ♠ by rank
+  - **Highlighted group** (right, below separator): trump-rank cards of any suit + jokers,
+    sorted ♦ ♣ ♥ ♠ then small joker then big joker; rendered with gold border + warm tint
+- The trump rank label is shown in the separator text so the number is unmistakable
+- If a player has no trump-rank cards or jokers, the separator and highlighted group
+  are omitted entirely
+
+*After bidding (BOTTOM_EXCHANGE and beyond):*
+- Highlighted section merges back into a single sorted hand automatically
+- All trump-rank cards (any suit) are grouped together in one contiguous block,
+  sub-sorted off-suit first (♦ ♣ ♥ ♠ order), on-suit trump rank last
+- Trump-suit non-rank cards appear immediately left of the trump-rank block
+- Jokers are rightmost
+
+*Suit display order:* ♦ ♣ ♥ ♠ everywhere (alternating red/black). Bid buttons match.
+
 ---
 
 ## Q&A

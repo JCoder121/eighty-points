@@ -4,6 +4,75 @@ Questions, observations, and answers collected during manual testing.
 
 ---
 
+## 4. Why localhost:8000 works now, and what it takes to go live
+
+### Why it works on your machine right now
+
+When you run `uvicorn shengji.network.app:app --reload`, uvicorn starts an HTTP server
+**on your own computer**. `localhost` is just a name that means "this machine", and
+`8000` is the port it listens on. So `http://localhost:8000` is purely local — only
+your machine can reach it. No one on the internet can visit it.
+
+The request flow right now:
+```
+Your browser  →  localhost:8000  →  uvicorn  →  FastAPI  →  your Python code
+```
+Everything happens on one machine. There is no network involved.
+
+### What "going live" actually means
+
+To make `https://jeff_eighty_points.com` work, you need three things:
+
+**1. A server on the internet (a VPS or cloud instance)**
+Instead of running uvicorn on your laptop, you run it on a machine with a public IP
+address that anyone on the internet can reach. Common cheap options:
+- **DigitalOcean Droplet** (~$6/month, simplest to get started)
+- **AWS EC2 / Google Cloud / Azure** (more powerful, more complex)
+- **Railway / Render / Fly.io** (platform-as-a-service — they manage the machine for
+  you, you just deploy the code; easiest option for a small project like this)
+
+**2. A domain name**
+You buy a domain (e.g. `jeff-eighty-points.com`) from a registrar like Namecheap or
+Cloudflare (~$10–15/year). Then you create a **DNS record** that points your domain
+to the public IP address of your server. DNS is just a global lookup table:
+"when someone asks for jeff-eighty-points.com, send them to IP 1.2.3.4".
+
+**3. HTTPS / TLS certificate**
+Browsers require HTTPS for WebSockets (`wss://`) to work on a real domain (our
+`app.js` already switches between `ws://` and `wss://` automatically based on the
+page protocol). You get a free TLS certificate from **Let's Encrypt**, typically
+automated via a tool called **Certbot** or handled automatically by platforms like
+Render/Railway.
+
+You also put a **reverse proxy** (nginx or Caddy) in front of uvicorn. The proxy
+handles HTTPS termination and forwards plain HTTP to uvicorn internally:
+
+```
+User's browser
+      │  HTTPS (port 443)
+      ▼
+  nginx / Caddy          ← handles TLS cert, domain routing
+      │  HTTP (port 8000, internal only)
+      ▼
+  uvicorn / FastAPI      ← your Python code, unchanged
+```
+
+### Simplest path to go live (recommended for a side project)
+
+1. Push the code to GitHub (already done)
+2. Sign up for **Render** (render.com) — free tier available
+3. Create a new "Web Service", point it at the GitHub repo
+4. Set the start command to: `uvicorn shengji.network.app:app --host 0.0.0.0 --port $PORT`
+5. Render gives you a free `*.onrender.com` URL automatically with HTTPS
+6. (Optional) Buy a domain and point it at Render via their custom domain settings
+
+The code itself needs **zero changes** to go from localhost to production — FastAPI and
+uvicorn are production-ready as-is for a small multiplayer game. The only caveat is
+that our game state is in-memory, so a server restart clears all active rooms (noted
+in the implementation plan's "Future Todos").
+
+---
+
 ## 1. Favicon 404 error in server logs
 
 **Observation:** When opening `http://localhost:8000` in the browser, the server logs show:

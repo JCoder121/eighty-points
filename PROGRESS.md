@@ -4,6 +4,123 @@ Newest entries at the top.
 
 ---
 
+## Session 9 — M8 Frontend
+
+**Status:** M8 complete. 499 tests passing (no new backend tests for M8 per spec).
+
+**Branch:** `feat/m8-frontend`
+
+### M8.1 — `index.html` full structure + CSS (committed)
+- Three screens: Landing, Lobby, Game
+- Landing: create-room form + join-room form, centered layout
+- Lobby: top bar (room code + trump info), player list with host badge,
+  slot placeholders for empty seats, mode selector (GM only),
+  superuser enable section with inline confirm (GM only)
+- Game screen: persistent top bar, 3×3 CSS-grid trick area (top/left/mid/right/bottom
+  positions), points display, hand area, context-sensitive action area, error bar,
+  modal overlay for round-over/game-over/aborted events
+- Card CSS: suit-color classes (red/black/purple), selectable + selected states
+  (`translateY(-12px)` lift per spec), 38×56 px card elements
+
+### M8.2 — `app.js` — WebSocket client core + Lobby (committed)
+- `S` state object: roomId, playerId, isGameMaster, ws, gameState, roomUpdate,
+  selectedIndices, awaitingValidation
+- REST helpers: `apiPost`, `createRoom`, `joinRoom`
+- WebSocket: `connectWS`, `sendWS`, `dispatchMessage`
+- All message handlers: room_update, game_state, card_dealt, round_over,
+  game_over, game_aborted, play_valid, play_invalid, error
+- Lobby rendering: 4-slot player list with Host badge, status text,
+  mode selector (GM only, active-button highlighting), superuser section
+- Trump info bar: derives display text from trump_context or defending players' rank
+- Overlay: showOverlay / hideOverlay; "OK" button returns to landing, resets all state
+- Room code click-to-copy (clipboard API)
+
+### Pitfalls & Learnings (M8)
+
+**Pitfall 1 — innerHTML+= destroys dynamically appended children**
+In `renderFriendDeclaration`, using `row.innerHTML += "<label>...</label>"` after
+`row.appendChild(selectEl)` resets the DOM, destroying the appended `<select>` element.
+Fix: use `document.createElement("label")` + `appendChild` exclusively; never mix
+`innerHTML +=` with `appendChild` on the same element.
+
+**Pitfall 2 — Bottom exchange UI: leader sees 25 cards, not 33**
+The engine adds bottom deck cards to the hand INSIDE `exchange_bottom()` (atomically
+on the server), so the leader's `game_state.players[i].hand` has only 25 cards during
+BOTTOM_EXCHANGE phase. The 8 bottom cards are in `gs.bottom_deck` (visible only to
+the leader). The UI must explicitly combine hand + bottom_deck to show 33 cards and
+allow selection from both pools. Card keys use `"hand:N"` / `"bot:N"` to track source.
+
+**Pitfall 3 — round_leader_id not in to_player_view**
+`round_leader_id` is only in `to_superuser_view`, not `to_player_view`. During
+FRIEND_DECLARATION phase the frontend must detect the leader via `current_leader_id`
+(which equals `round_leader_id` from the start of dealing until PLAYING begins).
+
+**Pitfall 4 — Selecting indices shift when hand changes**
+If `S.selectedIndices` (now `selectedKeys`) is not cleared on every game_state update,
+stale indices can point to wrong cards after the hand array changes (e.g., a card
+is dealt or played). The spec mandates clearing selection on every `game_state` update.
+
+### M8.3 — `app.js` — Game screen + Dealing + Bidding + Playing (committed)
+- Game phase transitions: shows game screen once DEALING begins
+- Trick area (renderTrickArea): maps player indices to top/left/right/bottom
+  positions (counter-clockwise seating); highlights current turn (gold) and
+  trick leader (blue); shows played cards per position
+- Points display: attacking pts + remaining to defend
+- Hand rendering (renderHand): sorts hand by suit groups then rank, with trump
+  cards grouped on the right; creates selectable card elements
+- Card sort key: non-trump suits → trump suit → off-suit trump rank → on-suit
+  trump rank → jokers; rank ascending within group
+- Card element: Unicode suit symbol + rank display, colored by suit
+- Bid area (renderBidArea): per-player available_bids from server enable/disable
+  suit buttons (♠♥♦♣) and joker buttons; current bid display; Pass + Close
+  Bidding buttons; dealing progress indicator
+- Play area (renderPlayArea): Play button (validate_play → play_cards two-step),
+  Clear Selection; disabled when not player's turn or no cards selected;
+  validation message inline
+- Bottom exchange (renderBottomExchange): select-8 counter, Confirm Exchange button
+- Friend declaration (renderFriendDeclaration): rank/suit/ordinal dropdowns,
+  Declare Friend button (Find Friends mode only)
+- Round-over/game-over/game-aborted overlay handling
+
+### Pending Tests — to be executed in M9
+
+These items were not verified during M8 (frontend has no automated tests per spec).
+They should be exercised as part of M9 integration testing.
+
+**Browser / manual flow tests:**
+- Create room → copy room code → join from 3 additional tabs (4 players total)
+- Host selects mode (Upgrade and Find Friends) — verify buttons highlight, status text updates
+- 4th player joins with mode already selected → verify auto-start (no manual action needed)
+- 4 players join, no mode selected → verify prompt shown to host only
+- During dealing: verify cards appear in hand sorted correctly (trump grouped right)
+- Bid buttons enable only when player holds valid trump-rank cards (per server available_bids)
+- Place a suit bid → verify current bid banner updates for all players
+- Reinforce a bid (same suit, 2nd card) → verify pair label appears
+- All 4 players pass during BIDDING_AFTER_DEAL → verify re-deal triggers
+- Host closes bidding manually → verify BOTTOM_EXCHANGE phase begins
+- Bottom exchange: bid winner sees 33 cards (25 hand + 8 bottom); select 8 → Confirm Exchange
+- Bottom exchange: non-leader sees waiting message, not the exchange UI
+- Find Friends mode: leader sees rank/suit/ordinal dropdowns; non-leaders see waiting message
+- Upgrade mode: FRIEND_DECLARATION phase never appears
+- Playing: select cards (verify translateY lift); Play → validate → commit
+- Playing: invalid play (e.g., not following suit) → inline error, selection preserved
+- Trick area: cards clear after trick is resolved; next leader highlighted
+- Points display updates after each trick
+- Round completes → round-over overlay shows score + rank advancement; auto-dismisses after ~4s
+- Game continues into next round automatically after round-over
+- Defender at rank A defends → game-over overlay; OK returns to landing
+- Disconnect one player mid-game → game_aborted overlay on all remaining players; OK returns to landing
+- Superuser enable: Host clicks "Enable Superuser Mode?" → confirm dialog appears → "Yes, Enable" → button disables with "ON" label
+
+**Backend integration tests (M9.1 / M9.2):**
+- Full round simulation (Upgrade): deal_specific_hands → close_bidding → exchange → play all 25 tricks → end_round → verify rank advancement
+- Full round simulation (Find Friends): same flow with friend declaration; verify friend revealed at correct ordinal
+- Last trick won by attackers with high-value bottom deck → verify multiplier applied
+- All 4 players pass → re-deal fires correctly
+- Game-over condition: defending team at rank A defends successfully
+
+---
+
 ## Session 8 — M7 Networking & Room Management
 
 **Status:** M7 complete. 499 tests passing. PR open for review.

@@ -618,12 +618,13 @@ function sortCardSet(items, trumpContext) {
 
 function cardSortKey(card, ctx) {
   // Groups (lower = shown left):
-  //   0-3  = non-trump suits in order (spades, hearts, diamonds, clubs)
+  //   0-3  = non-trump suits in alternating colour order (spades♠, hearts♥, clubs♣, diamonds♦)
+  //          → black / red / black / red — prevents same-colour suits from being adjacent
   //   7    = trump suit non-rank cards (high rank first within group)
   //   8    = off-suit trump rank cards
   //   9    = on-suit trump rank card
   //   10   = jokers (SJ < BJ)
-  const SUITS = ["spades", "hearts", "diamonds", "clubs"];
+  const SUITS = ["spades", "hearts", "clubs", "diamonds"];
   const ri = RANK_ORDER.indexOf(card.rank);
 
   if (card.rank === "small_joker") return [10, 0];
@@ -721,11 +722,12 @@ function renderBidArea(area, gs) {
   const bidRow    = document.createElement("div");
   bidRow.className = "action-row";
 
+  // Same alternating-colour order as the hand display: ♠ ♥ ♣ ♦
   const SUITS = [
     { suit: "spades",   sym: "♠" },
     { suit: "hearts",   sym: "♥" },
-    { suit: "diamonds", sym: "♦" },
     { suit: "clubs",    sym: "♣" },
+    { suit: "diamonds", sym: "♦" },
   ];
   for (const { suit, sym } of SUITS) {
     const btn = document.createElement("button");

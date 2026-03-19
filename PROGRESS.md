@@ -82,6 +82,43 @@ is dealt or played). The spec mandates clearing selection on every `game_state` 
   Declare Friend button (Find Friends mode only)
 - Round-over/game-over/game-aborted overlay handling
 
+### Pending Tests — to be executed in M9
+
+These items were not verified during M8 (frontend has no automated tests per spec).
+They should be exercised as part of M9 integration testing.
+
+**Browser / manual flow tests:**
+- Create room → copy room code → join from 3 additional tabs (4 players total)
+- Host selects mode (Upgrade and Find Friends) — verify buttons highlight, status text updates
+- 4th player joins with mode already selected → verify auto-start (no manual action needed)
+- 4 players join, no mode selected → verify prompt shown to host only
+- During dealing: verify cards appear in hand sorted correctly (trump grouped right)
+- Bid buttons enable only when player holds valid trump-rank cards (per server available_bids)
+- Place a suit bid → verify current bid banner updates for all players
+- Reinforce a bid (same suit, 2nd card) → verify pair label appears
+- All 4 players pass during BIDDING_AFTER_DEAL → verify re-deal triggers
+- Host closes bidding manually → verify BOTTOM_EXCHANGE phase begins
+- Bottom exchange: bid winner sees 33 cards (25 hand + 8 bottom); select 8 → Confirm Exchange
+- Bottom exchange: non-leader sees waiting message, not the exchange UI
+- Find Friends mode: leader sees rank/suit/ordinal dropdowns; non-leaders see waiting message
+- Upgrade mode: FRIEND_DECLARATION phase never appears
+- Playing: select cards (verify translateY lift); Play → validate → commit
+- Playing: invalid play (e.g., not following suit) → inline error, selection preserved
+- Trick area: cards clear after trick is resolved; next leader highlighted
+- Points display updates after each trick
+- Round completes → round-over overlay shows score + rank advancement; auto-dismisses after ~4s
+- Game continues into next round automatically after round-over
+- Defender at rank A defends → game-over overlay; OK returns to landing
+- Disconnect one player mid-game → game_aborted overlay on all remaining players; OK returns to landing
+- Superuser enable: Host clicks "Enable Superuser Mode?" → confirm dialog appears → "Yes, Enable" → button disables with "ON" label
+
+**Backend integration tests (M9.1 / M9.2):**
+- Full round simulation (Upgrade): deal_specific_hands → close_bidding → exchange → play all 25 tricks → end_round → verify rank advancement
+- Full round simulation (Find Friends): same flow with friend declaration; verify friend revealed at correct ordinal
+- Last trick won by attackers with high-value bottom deck → verify multiplier applied
+- All 4 players pass → re-deal fires correctly
+- Game-over condition: defending team at rank A defends successfully
+
 ---
 
 ## Session 8 — M7 Networking & Room Management

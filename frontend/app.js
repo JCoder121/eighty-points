@@ -631,31 +631,40 @@ function sortCardSet(items, trumpContext) {
 }
 
 function cardSortKey(card, ctx) {
-  // Groups (lower = shown left):
-  //   0-3  = non-trump suits in alternating colour order (spades♠, hearts♥, clubs♣, diamonds♦)
-  //          → black / red / black / red — prevents same-colour suits from being adjacent
-  //   7    = trump suit non-rank cards (high rank first within group)
-  //   8    = off-suit trump rank cards
-  //   9    = on-suit trump rank card
-  //   10   = jokers (SJ < BJ)
-  const SUITS = ["spades", "hearts", "clubs", "diamonds"];
+  // Suit display order (non-trump): ♦ ♣ ♥ ♠  (alternating red/black)
+  // Groups (lower = shown further left):
+  //   0 = ♦ diamonds  (non-trump, non-rank)
+  //   1 = ♣ clubs     (non-trump, non-rank)
+  //   2 = ♥ hearts    (non-trump, non-rank)
+  //   3 = ♠ spades    (non-trump, non-rank)
+  //   4 = trump-suit non-rank cards
+  //   5 = ALL trump-rank cards (any suit) — off-suit by ♦♣♥♠ order, on-suit last
+  //   6 = jokers (SJ < BJ)
+  const SUITS = ["diamonds", "clubs", "hearts", "spades"];
   const ri = RANK_ORDER.indexOf(card.rank);
 
-  if (card.rank === "small_joker") return [10, 0];
-  if (card.rank === "big_joker")   return [10, 1];
+  if (card.rank === "small_joker") return [6, 0];
+  if (card.rank === "big_joker")   return [6, 1];
 
   if (!ctx || !ctx.trump_rank) {
-    return [SUITS.indexOf(card.suit) + 1 || 4, ri];
+    const si = SUITS.indexOf(card.suit);
+    return [si >= 0 ? si : SUITS.length - 1, ri];
   }
 
   const { trump_rank, trump_suit } = ctx;
   const isTrumpRank = card.rank === trump_rank;
   const isTrumpSuit = trump_suit && card.suit === trump_suit;
 
-  if (isTrumpRank && isTrumpSuit) return [9, 0];
-  if (isTrumpRank)                return [8, SUITS.indexOf(card.suit)];
-  if (isTrumpSuit)                return [7, ri];
-  return [(SUITS.indexOf(card.suit) + 1) || 4, ri];
+  // All trump-rank cards in one block (group 5).
+  // On-suit trump rank is the strongest of the group — sort it last (subIdx = 4).
+  if (isTrumpRank) {
+    const subIdx = isTrumpSuit ? SUITS.length : SUITS.indexOf(card.suit);
+    return [5, subIdx >= 0 ? subIdx : SUITS.length - 1];
+  }
+  if (isTrumpSuit) return [4, ri];
+
+  const si = SUITS.indexOf(card.suit);
+  return [si >= 0 ? si : SUITS.length - 1, ri];
 }
 
 // ── Selected cards → serialized card objects ──────────────────────────────
@@ -736,12 +745,12 @@ function renderBidArea(area, gs) {
   const bidRow    = document.createElement("div");
   bidRow.className = "action-row";
 
-  // Same alternating-colour order as the hand display: ♠ ♥ ♣ ♦
+  // Same order as the hand display: ♦ ♣ ♥ ♠
   const SUITS = [
-    { suit: "spades",   sym: "♠" },
-    { suit: "hearts",   sym: "♥" },
-    { suit: "clubs",    sym: "♣" },
     { suit: "diamonds", sym: "♦" },
+    { suit: "clubs",    sym: "♣" },
+    { suit: "hearts",   sym: "♥" },
+    { suit: "spades",   sym: "♠" },
   ];
   for (const { suit, sym } of SUITS) {
     const btn = document.createElement("button");

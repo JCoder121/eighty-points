@@ -4,6 +4,61 @@ Newest entries at the top.
 
 ---
 
+## Session 9 — M8 Frontend
+
+**Status:** In progress. 499 tests passing (no new backend tests for M8).
+
+**Branch:** `feat/m8-frontend`
+
+### M8.1 — `index.html` full structure + CSS (committed)
+- Three screens: Landing, Lobby, Game
+- Landing: create-room form + join-room form, centered layout
+- Lobby: top bar (room code + trump info), player list with host badge,
+  slot placeholders for empty seats, mode selector (GM only),
+  superuser enable section with inline confirm (GM only)
+- Game screen: persistent top bar, 3×3 CSS-grid trick area (top/left/mid/right/bottom
+  positions), points display, hand area, context-sensitive action area, error bar,
+  modal overlay for round-over/game-over/aborted events
+- Card CSS: suit-color classes (red/black/purple), selectable + selected states
+  (`translateY(-12px)` lift per spec), 38×56 px card elements
+
+### M8.2 — `app.js` — WebSocket client core + Lobby (committed)
+- `S` state object: roomId, playerId, isGameMaster, ws, gameState, roomUpdate,
+  selectedIndices, awaitingValidation
+- REST helpers: `apiPost`, `createRoom`, `joinRoom`
+- WebSocket: `connectWS`, `sendWS`, `dispatchMessage`
+- All message handlers: room_update, game_state, card_dealt, round_over,
+  game_over, game_aborted, play_valid, play_invalid, error
+- Lobby rendering: 4-slot player list with Host badge, status text,
+  mode selector (GM only, active-button highlighting), superuser section
+- Trump info bar: derives display text from trump_context or defending players' rank
+- Overlay: showOverlay / hideOverlay; "OK" button returns to landing, resets all state
+- Room code click-to-copy (clipboard API)
+
+### M8.3 — `app.js` — Game screen + Dealing + Bidding + Playing (committed)
+- Game phase transitions: shows game screen once DEALING begins
+- Trick area (renderTrickArea): maps player indices to top/left/right/bottom
+  positions (counter-clockwise seating); highlights current turn (gold) and
+  trick leader (blue); shows played cards per position
+- Points display: attacking pts + remaining to defend
+- Hand rendering (renderHand): sorts hand by suit groups then rank, with trump
+  cards grouped on the right; creates selectable card elements
+- Card sort key: non-trump suits → trump suit → off-suit trump rank → on-suit
+  trump rank → jokers; rank ascending within group
+- Card element: Unicode suit symbol + rank display, colored by suit
+- Bid area (renderBidArea): per-player available_bids from server enable/disable
+  suit buttons (♠♥♦♣) and joker buttons; current bid display; Pass + Close
+  Bidding buttons; dealing progress indicator
+- Play area (renderPlayArea): Play button (validate_play → play_cards two-step),
+  Clear Selection; disabled when not player's turn or no cards selected;
+  validation message inline
+- Bottom exchange (renderBottomExchange): select-8 counter, Confirm Exchange button
+- Friend declaration (renderFriendDeclaration): rank/suit/ordinal dropdowns,
+  Declare Friend button (Find Friends mode only)
+- Round-over/game-over/game-aborted overlay handling
+
+---
+
 ## Session 8 — M7 Networking & Room Management
 
 **Status:** M7 complete. 499 tests passing. PR open for review.

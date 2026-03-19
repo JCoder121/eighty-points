@@ -4,9 +4,9 @@ Newest entries at the top.
 
 ---
 
-## Session 10 — Bug Fix: Bidding UX and Rules
+## Session 10 — Bug Fix: Bidding UX, Rules, and Follow-Play Validation
 
-**Status:** Complete. 499 tests still passing.
+**Status:** Complete. 509 tests passing.
 
 **Branch:** `fix/bidding-ux-and-rules`
 
@@ -76,6 +76,37 @@ New CSS: `.hand-trump-sep`, `.card.trump-highlight`.
 - `S.hasPassed` resets in `handleGameState` when `bids.length` increases
   (server cleared passed_in_bidding after a new bid, so all must pass
   again) or when phase transitions to `"dealing"` (new round).
+
+### Fix 5 — Hand display during bidding (frontend)
+
+- Hand split during `dealing`/`bidding_after_deal` into a main group and
+  a highlighted trump-rank section separated by a gold dashed divider.
+- Trump-rank cards and jokers rendered with gold border and warm tint.
+- After bidding, hand merges back into a single sorted block with trump-rank
+  cards grouped contiguously (off-suit first, then on-suit, then jokers).
+- Suit order fixed everywhere to ♦ ♣ ♥ ♠ (alternating red/black).
+
+### Fix 6 — Follow-play validation rejects valid cards (engine + tricks + tests)
+
+Two bugs discovered during play-testing where legal cards were rejected:
+
+- **Bug 1 (Single lead):** Player leads A♥; follower's 4♥ is rejected even
+  though it is a valid heart. Root cause: `get_legal_plays` returns only
+  `[suited[0]]` — the first arbitrary card in the suited list.
+- **Bug 2 (Pair lead, no pair available):** Follower has no heart pair; 4♥+5♥
+  is rejected but 10♥+J♥ is accepted, even though both are equally valid.
+  Root cause: `_match_group`'s degraded path returns one arbitrary combination
+  of 2 suited cards; any other combination fails `_cards_match_any`.
+
+**Fix:** Added `is_valid_follow(proposed, hand, led_format, led_suit, ctx)` to
+`tricks.py`. Validates by invariants directly:
+- Single: any one suited card is valid
+- IdenticalGroup(k): must include a group if hand has one; otherwise any k suited singles
+- Tractor/Throw: falls back to `get_legal_plays` comparison
+
+Both `engine.py` (play_cards) and `handler.py` (validate_play) updated to call
+`is_valid_follow` instead of the old `get_legal_plays + _cards_match_any` pattern.
+11 new regression tests added to `test_tricks.py`.
 
 ---
 

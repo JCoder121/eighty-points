@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Callable, Awaitable
 from shengji.engine.scoring import count_attacking_points, compute_rank_advancement
 from shengji.engine.tricks import (
     get_legal_plays,
+    is_valid_follow,
     resolve_trick_winner,
     validate_throw,
 )
@@ -582,13 +583,12 @@ class GameEngine:
             if led_fmt is None or led_suit is None:
                 raise ValueError("Internal error: led format/suit not set.")
 
-            # Validate follow: get legal plays and ensure the chosen cards match
-            legal = get_legal_plays(player.hand, led_fmt, led_suit, ctx)
-            # A play is legal if it equals one of the legal options (as a multiset)
-            if not _cards_match_any(cards, legal):
+            # Validate follow: check invariants directly (allows any valid follow,
+            # not just the single arbitrary option returned by get_legal_plays)
+            if not is_valid_follow(cards, player.hand, led_fmt, led_suit, ctx):
                 raise ValueError(
-                    f"Illegal follow: {player_id!r} must play "
-                    f"{legal[0]!r} given the led format."
+                    f"Illegal follow: {player_id!r}'s play does not satisfy "
+                    "the following rules for the led format."
                 )
 
         # Remove cards from hand

@@ -120,6 +120,28 @@ in a single block after bidding ends.
 
 *Suit display order:* ♦ ♣ ♥ ♠ everywhere (alternating red/black). Bid buttons match.
 
+### Follow-play validation rejects valid cards (two bugs found during play-testing)
+
+**Bug 1 — Any suited single must be allowed to follow a single lead**
+
+Observed: Player A leads A♥ (non-trump suit, clubs is trump). Player B tries to play 4♥ — the engine rejects it as illegal, even though 4♥ is a valid heart.
+
+Root cause: `get_legal_plays` for a single lead returns `[suited[0]]` — only the first card in the suited list. The engine then checks `_cards_match_any(proposed, legal)`, which rejects any card other than that specific arbitrary first card.
+
+**Bug 2 — Any 2 suited singles must be allowed to follow a pair lead when no pair is available**
+
+Observed: Player A leads A♥A♥ (pair). Player B has no hearts pair. Playing 4♥+5♥ is rejected, but 10♥+J♥ is accepted — even though both are equally valid (no pair available, any two hearts suffice).
+
+Root cause: `_match_group` for a degraded pair (no group of size k) iterates `sorted(groups.values(), ...)` and returns exactly one arbitrary combination of 2 suited cards. Any other combination fails `_cards_match_any`.
+
+*Fix:* Added `is_valid_follow(proposed, hand, led_format, led_suit, ctx)` to `tricks.py`. Instead of comparing against one arbitrary option, it checks invariants directly:
+- Must play as many suited cards as possible
+- For Single: any one suited card is valid
+- For IdenticalGroup(k): if hand has a group of k, proposed must include one; otherwise any k suited singles are valid
+- For Tractor/Throw: falls back to `get_legal_plays` comparison (complex ordering rules still apply)
+
+Both `engine.py` (play_cards) and `handler.py` (validate_play) now call `is_valid_follow` instead of the old `get_legal_plays + _cards_match_any` pattern.
+
 ---
 
 ## Q&A

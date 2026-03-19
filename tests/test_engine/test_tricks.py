@@ -5,6 +5,7 @@ import pytest
 
 from shengji.engine.tricks import (
     get_legal_plays,
+    is_valid_follow,
     resolve_trick_winner,
     validate_throw,
 )
@@ -354,3 +355,92 @@ class TestTrumpOrdering:
         assert ctx_no_trump.effective_suit(TWO_H) == "hearts"
         # Jokers are always trump
         assert ctx_no_trump.effective_suit(SJ) == "trump"
+
+
+# ---------------------------------------------------------------------------
+# is_valid_follow — bug regression tests (bugs reported during play-testing)
+# ---------------------------------------------------------------------------
+# Context: trump_rank=2, trump_suit=clubs.  Hearts is a plain (non-trump) suit.
+
+_FOUR_H  = _c(Suit.HEARTS, Rank.FOUR)
+_FIVE_H  = _c(Suit.HEARTS, Rank.FIVE)
+_TEN_H   = _c(Suit.HEARTS, Rank.TEN)
+_JACK_H  = _c(Suit.HEARTS, Rank.JACK)
+_ACE_H   = _c(Suit.HEARTS, Rank.ACE)
+_THREE_S = _c(Suit.SPADES, Rank.THREE)
+
+_CTX_CLUBS_TRUMP = TrumpContext(trump_rank=Rank.TWO, trump_suit=Suit.CLUBS)
+
+
+class TestIsValidFollowSingle:
+    """Bug: any suited single must legally follow a single lead."""
+
+    ctx = _CTX_CLUBS_TRUMP
+
+    def test_any_suited_single_is_valid(self):
+        # Hand has several hearts; any one should be valid to follow a heart lead
+        hand = [_FOUR_H, _FIVE_H, _TEN_H, _JACK_H]
+        assert is_valid_follow([_FOUR_H],  hand, Single(), "hearts", self.ctx)
+        assert is_valid_follow([_FIVE_H],  hand, Single(), "hearts", self.ctx)
+        assert is_valid_follow([_TEN_H],   hand, Single(), "hearts", self.ctx)
+        assert is_valid_follow([_JACK_H],  hand, Single(), "hearts", self.ctx)
+
+    def test_off_suit_invalid_when_suited_available(self):
+        hand = [_FOUR_H, _THREE_S]
+        # Must play a heart; spade is invalid when a heart is available
+        assert not is_valid_follow([_THREE_S], hand, Single(), "hearts", self.ctx)
+
+    def test_off_suit_valid_when_no_suited_available(self):
+        hand = [_THREE_S]
+        assert is_valid_follow([_THREE_S], hand, Single(), "hearts", self.ctx)
+
+    def test_wrong_number_of_cards_invalid(self):
+        hand = [_FOUR_H, _FIVE_H]
+        assert not is_valid_follow([_FOUR_H, _FIVE_H], hand, Single(), "hearts", self.ctx)
+
+
+class TestIsValidFollowPairNoGroup:
+    """Bug: when no pair available, any 2 suited singles must be valid follow for pair lead."""
+
+    ctx = _CTX_CLUBS_TRUMP
+
+    def test_lowest_two_singles_valid(self):
+        # Bug case: 4♥+5♥ was rejected; should be valid when no pair exists
+        hand = [_FOUR_H, _FIVE_H, _TEN_H, _JACK_H]
+        assert is_valid_follow([_FOUR_H, _FIVE_H], hand, IdenticalGroup(2), "hearts", self.ctx)
+
+    def test_non_lowest_two_singles_also_valid(self):
+        # 10♥+J♥ was already accepted; must still be valid
+        hand = [_FOUR_H, _FIVE_H, _TEN_H, _JACK_H]
+        assert is_valid_follow([_TEN_H, _JACK_H], hand, IdenticalGroup(2), "hearts", self.ctx)
+
+    def test_any_combination_of_two_suited_singles_valid(self):
+        hand = [_FOUR_H, _FIVE_H, _TEN_H, _JACK_H]
+        assert is_valid_follow([_FOUR_H, _TEN_H],  hand, IdenticalGroup(2), "hearts", self.ctx)
+        assert is_valid_follow([_FOUR_H, _JACK_H], hand, IdenticalGroup(2), "hearts", self.ctx)
+        assert is_valid_follow([_FIVE_H, _TEN_H],  hand, IdenticalGroup(2), "hearts", self.ctx)
+
+    def test_off_suit_invalid_when_two_suited_available(self):
+        hand = [_FOUR_H, _FIVE_H, _THREE_S]
+        # Must use both hearts; cannot substitute spade
+        assert not is_valid_follow([_FOUR_H, _THREE_S], hand, IdenticalGroup(2), "hearts", self.ctx)
+
+    def test_must_use_all_suited_when_only_one_heart(self):
+        # Only 1 heart; must play it plus any other card
+        hand = [_FOUR_H, _THREE_S]
+        assert is_valid_follow([_FOUR_H, _THREE_S], hand, IdenticalGroup(2), "hearts", self.ctx)
+        # Cannot skip the heart
+        assert not is_valid_follow([_THREE_S, _THREE_S], hand, IdenticalGroup(2), "hearts", self.ctx)
+
+
+class TestIsValidFollowPairHasGroup:
+    """When hand has a pair, proposed play must include that pair."""
+
+    ctx = _CTX_CLUBS_TRUMP
+
+    def test_must_play_pair_when_available(self):
+        hand = [_ACE_H, _ACE_H, _FOUR_H, _FIVE_H]
+        # A♥A♥ is a valid pair play
+        assert is_valid_follow([_ACE_H, _ACE_H], hand, IdenticalGroup(2), "hearts", self.ctx)
+        # 4♥5♥ is NOT valid — hand has a pair so must use it
+        assert not is_valid_follow([_FOUR_H, _FIVE_H], hand, IdenticalGroup(2), "hearts", self.ctx)

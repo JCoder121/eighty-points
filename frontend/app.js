@@ -530,13 +530,13 @@ function renderHand(gs) {
   for (const { card, key } of sorted) {
     const el = makeCardEl(card, canSelect);
 
-    // Mark bottom cards with a subtle indicator
+    // Mark bottom deck cards with a subtle indicator (no opacity change
+    // because selected state would look dim; use the ⊕ badge instead)
     if (key.startsWith("bot:")) {
-      el.style.opacity = "0.85";
-      el.title = "Bottom deck card";
-      // Add tiny "B" badge
+      el.title = "Bottom deck card — can be put back";
       const badge = document.createElement("span");
-      badge.style.cssText = "font-size:8px;color:#888;";
+      badge.style.cssText = "font-size:8px;color:#888;position:absolute;top:1px;right:2px;";
+      el.style.position = "relative";
       badge.textContent = "⊕";
       el.appendChild(badge);
     }

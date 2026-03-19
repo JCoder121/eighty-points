@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import WebSocket, WebSocketDisconnect
 
 from shengji.engine.engine import GameEngine
-from shengji.engine.tricks import get_legal_plays, validate_throw
+from shengji.engine.tricks import get_legal_plays, is_valid_follow, validate_throw
 from shengji.models.card import Card, Rank, Suit, SUITED_SUITS
 from shengji.models.friend_declaration import FriendDeclaration
 from shengji.models.game_state import GamePhase
@@ -305,8 +305,10 @@ async def handle_message(
                 return
 
             engine.place_bid(player_id, bid_cards)
-            # Reset pass tracking so all must pass again to close bidding.
+            # Reset pass tracking.  Auto-count the bidder as passed (they have
+            # already committed; the remaining 3 players must pass to close).
             room.passed_in_bidding.clear()
+            room.passed_in_bidding.add(player_id)
             await broadcast_game_states(room)
 
         elif action == "pass_bid":
@@ -398,10 +400,7 @@ async def handle_message(
                 else:
                     led_fmt = getattr(state, "_led_format", None)
                     led_suit = getattr(state, "_led_suit", None)
-                    legal = get_legal_plays(player_obj.hand, led_fmt, led_suit, ctx)
-                    # Check if the proposed play matches any legal option
-                    from shengji.engine.engine import _cards_match_any
-                    if not _cards_match_any(cards, legal):
+                    if not is_valid_follow(cards, player_obj.hand, led_fmt, led_suit, ctx):
                         raise ValueError("That play is not legal given the led format.")
                 await send_to(room, player_id, {"type": "play_valid"})
             except ValueError as exc:

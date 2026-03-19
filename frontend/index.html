@@ -309,7 +309,7 @@
       padding: 2px;
     }
     .card .card-rank { font-size: 14px; }
-    .card .card-suit { font-size: 13px; }
+    .card .card-suit { font-size: 18px; line-height: 1; }
     .card.suit-hearts   { color: #cc0000; }
     .card.suit-diamonds { color: #cc0000; }
     .card.suit-spades   { color: #111111; }
@@ -376,6 +376,39 @@
     }
     .bid-btn-suit.suit-hearts, .bid-btn-suit.suit-diamonds { color: #ff6666; }
     .bid-btn-suit.suit-spades, .bid-btn-suit.suit-clubs   { color: #ccccff; }
+
+    /* Trump-rank highlight section (bidding phase only) */
+    .hand-trump-sep {
+      flex-basis: 100%;        /* forces a row break in the flex hand area */
+      width: 100%;
+      text-align: center;
+      font-size: 11px;
+      color: #ffcc44;
+      border-top: 1px dashed rgba(255, 204, 68, 0.4);
+      padding-top: 6px;
+      margin-top: 4px;
+      letter-spacing: 0.5px;
+    }
+    .card.trump-highlight {
+      border: 2px solid #ffcc44;
+      background: #fffadc;        /* warm gold tint — distinct from normal #f8f4e8 */
+      box-shadow: 0 0 6px rgba(255, 204, 68, 0.55);
+    }
+    /* Keep coloured text readable on the tinted background */
+    .card.trump-highlight.suit-hearts,
+    .card.trump-highlight.suit-diamonds { color: #bb0000; }
+    .card.trump-highlight.suit-spades,
+    .card.trump-highlight.suit-clubs   { color: #111111; }
+    .card.trump-highlight.suit-joker   { color: #5500aa; }
+
+    /* Pass button — pressed state */
+    button.btn-passed {
+      background: #1a3a1a;
+      border-color: #44aa44;
+      color: #88dd88;
+      opacity: 1;   /* override the disabled opacity so the checkmark stays visible */
+      cursor: default;
+    }
 
     #play-validation-msg {
       font-size: 13px;

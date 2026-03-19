@@ -213,6 +213,95 @@ def _match_tractor(suited: list[Card], led: Tractor, ctx: TrumpContext) -> list[
 
 
 # ---------------------------------------------------------------------------
+# is_valid_follow
+# ---------------------------------------------------------------------------
+
+def _multiset_eq(a: list[Card], b: list[Card]) -> bool:
+    """Return True if two card lists are equal as multisets."""
+    return sorted(repr(c) for c in a) == sorted(repr(c) for c in b)
+
+
+def is_valid_follow(
+    proposed: list[Card],
+    hand: list[Card],
+    led_format: TrickFormat,
+    led_suit: str,
+    ctx: TrumpContext,
+) -> bool:
+    """Return True if *proposed* is a legal follow.
+
+    Validates by checking invariants directly rather than comparing to a single
+    'best' option from get_legal_plays.  This allows any valid follow
+    (e.g., any suited single, any 2 suited singles when no pair is available).
+
+    Rules
+    -----
+    1. Must play exactly as many cards as the led format requires.
+    2. Must play as many suited cards as possible (up to the required count).
+    3. If not enough suited cards, must play ALL suited cards (fill freely).
+    4. If enough suited cards, all proposed cards must be suited, and:
+       - Single: any one suited card is valid.
+       - IdenticalGroup(k): if hand has a group of k, proposed must too;
+         otherwise any k suited cards are valid.
+       - Tractor / Throw: fall back to get_legal_plays comparison (complex
+         ordering rules still apply).
+    """
+    n = _format_card_count(led_format)
+    if len(proposed) != n:
+        return False
+
+    # Verify all proposed cards are in hand
+    hand_copy = list(hand)
+    for c in proposed:
+        if c not in hand_copy:
+            return False
+        hand_copy.remove(c)
+
+    suited_in_hand = [c for c in hand if ctx.effective_suit(c) == led_suit]
+    suited_in_proposed = [c for c in proposed if ctx.effective_suit(c) == led_suit]
+
+    must_suited = min(len(suited_in_hand), n)
+
+    # Must play as many suited cards as possible
+    if len(suited_in_proposed) < must_suited:
+        return False
+
+    # Not enough suited cards — must play ALL suited, fill rest freely
+    if len(suited_in_hand) < n:
+        return _multiset_eq(suited_in_proposed, suited_in_hand)
+
+    # Enough suited cards — all proposed must be suited
+    if len(suited_in_proposed) != n:
+        return False
+
+    # Format-specific checks
+    if isinstance(led_format, Single):
+        return True  # any one suited card is valid
+
+    if isinstance(led_format, IdenticalGroup):
+        k = led_format.count
+        # Check if hand has a group of size >= k
+        groups: dict[tuple, list[Card]] = defaultdict(list)
+        for c in suited_in_hand:
+            groups[ctx.card_order(c)].append(c)
+        hand_has_group = any(len(v) >= k for v in groups.values())
+
+        if not hand_has_group:
+            # No group of k available — any k suited cards are valid
+            return True
+
+        # Hand has a qualifying group — proposed must include one too
+        prop_groups: dict[tuple, list[Card]] = defaultdict(list)
+        for c in suited_in_proposed:
+            prop_groups[ctx.card_order(c)].append(c)
+        return any(len(v) >= k for v in prop_groups.values())
+
+    # Tractor / Throw — complex ordering rules; fall back to get_legal_plays
+    legal = get_legal_plays(hand, led_format, led_suit, ctx)
+    return any(_multiset_eq(proposed, opt) for opt in legal)
+
+
+# ---------------------------------------------------------------------------
 # validate_throw
 # ---------------------------------------------------------------------------
 

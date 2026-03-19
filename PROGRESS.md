@@ -4,6 +4,112 @@ Newest entries at the top.
 
 ---
 
+## Session 10 — Bug Fix: Bidding UX, Rules, and Follow-Play Validation
+
+**Status:** Complete. 509 tests passing.
+
+**Branch:** `fix/bidding-ux-and-rules`
+
+Four bugs/UX issues discovered during manual testing after M8.
+
+### Fix 1 — Larger suit symbols + non-adjacent suit colours (frontend)
+
+- `.card .card-suit` font-size increased `13px → 18px` so ♠♥♣♦ symbols
+  are clearly readable at a glance.
+- Suit order in hand (and bid buttons) changed from `[♠♥♦♣]` to `[♠♥♣♦]`
+  (black–red–black–red alternating). Previously hearts and diamonds (both
+  red) were adjacent, making them hard to distinguish. Updated in both
+  `cardSortKey` (hand sort) and `renderBidArea` (bid suit buttons).
+
+### Fix 2 — Bidding overtake rule: single cannot beat single (engine + handler + tests)
+
+- **Bug:** `_can_overtake` allowed a single trump-rank card from a different
+  player to overtake another single. The correct rule is that a single can
+  only be beaten by a strictly stronger bid (pair or joker pair).
+- **Fix:** Removed the `new_str == cur_str == 1 and different player` exception
+  from `_can_overtake`. Now only `new_str > cur_str` returns True.
+- **Handler change:** When a bid is placed, the bidder is immediately added to
+  `passed_in_bidding` (as if they auto-passed themselves). Without this,
+  auto-close could never trigger after a bid since the bidder's Pass button
+  is disabled (Fix 3). With it, only the remaining 3 players need to pass
+  for auto-close.
+- Updated 3 tests in `test_bidding.py` to match corrected semantics.
+
+### Fix 3 — Pass button disabled after the player has bid (frontend)
+
+- If `gs.bids.some(b => b.player_id === S.playerId)`, the Pass button is
+  disabled. A player who has placed a bid cannot take it back by passing.
+  Players who have only passed (no bid) can still pass again after another
+  player raises the bid.
+
+### Fix 5 — Highlighted trump-rank section during bidding; updated suit order (frontend)
+
+Two sub-changes:
+
+**5a — Suit order finalised as ♦♣♥♠ everywhere**
+Changed from `[♠♥♣♦]` (previous fix) to `[♦♣♥♠]` in both `cardSortKey` and bid
+buttons. Still alternates red/black. `cardSortKey` group numbering simplified:
+non-trump 0–3, trump-suit 4, all-trump-rank 5, jokers 6 (previously 7/8/9/10).
+
+**5b — All trump-rank cards now in one contiguous block during playing phase**
+Previously split across group 8 (off-suit trump rank) and group 9 (on-suit trump rank).
+Now both are group 5, sub-sorted: off-suit by suit order, on-suit last.
+
+**5c — Bidding-phase hand split**
+During `DEALING` and `BIDDING_AFTER_DEAL`, `renderHand` divides the hand into:
+- Main group: non-trump-rank, non-joker cards (sorted ♦♣♥♠ by rank)
+- Highlighted group: trump-rank (any suit) + jokers, sorted ♦♣♥♠ then SJ then BJ
+
+Highlighted cards shown below a gold dashed separator with the trump rank label.
+Cards rendered with `.trump-highlight` (gold border + warm tinted background + glow).
+Once bidding closes (phase → `BOTTOM_EXCHANGE`), the split collapses automatically
+back into a single merged hand.
+
+New helpers: `isJoker()`, `getTrumpRank()`, `sortBiddingMain()`, `sortBiddingHighlight()`.
+New CSS: `.hand-trump-sep`, `.card.trump-highlight`.
+
+### Fix 4 — Pass button visual feedback (frontend)
+
+- Added `S.hasPassed` and `S.lastBidsCount` to app state.
+- On press: immediately changes button to `"Passed ✓"` with a green CSS
+  class `btn-passed` (green border + text, opacity:1 so it stays visible).
+- `S.hasPassed` resets in `handleGameState` when `bids.length` increases
+  (server cleared passed_in_bidding after a new bid, so all must pass
+  again) or when phase transitions to `"dealing"` (new round).
+
+### Fix 5 — Hand display during bidding (frontend)
+
+- Hand split during `dealing`/`bidding_after_deal` into a main group and
+  a highlighted trump-rank section separated by a gold dashed divider.
+- Trump-rank cards and jokers rendered with gold border and warm tint.
+- After bidding, hand merges back into a single sorted block with trump-rank
+  cards grouped contiguously (off-suit first, then on-suit, then jokers).
+- Suit order fixed everywhere to ♦ ♣ ♥ ♠ (alternating red/black).
+
+### Fix 6 — Follow-play validation rejects valid cards (engine + tricks + tests)
+
+Two bugs discovered during play-testing where legal cards were rejected:
+
+- **Bug 1 (Single lead):** Player leads A♥; follower's 4♥ is rejected even
+  though it is a valid heart. Root cause: `get_legal_plays` returns only
+  `[suited[0]]` — the first arbitrary card in the suited list.
+- **Bug 2 (Pair lead, no pair available):** Follower has no heart pair; 4♥+5♥
+  is rejected but 10♥+J♥ is accepted, even though both are equally valid.
+  Root cause: `_match_group`'s degraded path returns one arbitrary combination
+  of 2 suited cards; any other combination fails `_cards_match_any`.
+
+**Fix:** Added `is_valid_follow(proposed, hand, led_format, led_suit, ctx)` to
+`tricks.py`. Validates by invariants directly:
+- Single: any one suited card is valid
+- IdenticalGroup(k): must include a group if hand has one; otherwise any k suited singles
+- Tractor/Throw: falls back to `get_legal_plays` comparison
+
+Both `engine.py` (play_cards) and `handler.py` (validate_play) updated to call
+`is_valid_follow` instead of the old `get_legal_plays + _cards_match_any` pattern.
+11 new regression tests added to `test_tricks.py`.
+
+---
+
 ## Session 9 — M8 Frontend
 
 **Status:** M8 complete. 499 tests passing (no new backend tests for M8 per spec).

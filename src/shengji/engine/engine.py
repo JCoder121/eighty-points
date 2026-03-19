@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Callable, Awaitable
 from shengji.engine.scoring import count_attacking_points, compute_rank_advancement
 from shengji.engine.tricks import (
     get_legal_plays,
+    is_valid_follow,
     resolve_trick_winner,
     validate_throw,
 )
@@ -257,20 +258,20 @@ class GameEngine:
         """Return True if the proposed bid legally supersedes *current_bid*.
 
         Overtaking rules (strength = 1 < 2 < 3 < 4):
-          • No current bid       → always valid.
-          • Strictly stronger    → valid.
-          • Same strength (==1)  → valid only when a *different* player bids.
-          • Suited pair (2) vs suited pair (2) → NEVER valid (equal strength, no suit rank).
+          • No current bid    → always valid.
+          • Strictly stronger → valid (any player, any suit).
+          • Same strength     → NEVER valid (a single cannot beat another single;
+                                a suited pair cannot beat another suited pair).
+
+        Implication: to overtake an existing single bid, you must hold a pair or
+        better.  To raise your own single to a pair, that is strength 2 > 1 and
+        is already covered by the "strictly stronger" rule.
         """
         if current_bid is None:
             return True
         new_str = GameEngine._bid_strength(new_cards)
         cur_str = GameEngine._bid_strength(current_bid.cards)
-        if new_str > cur_str:
-            return True
-        if new_str == cur_str == 1 and new_player_id != current_bid.player_id:
-            return True
-        return False
+        return new_str > cur_str
 
     # ------------------------------------------------------------------
     # Bidding
@@ -582,13 +583,12 @@ class GameEngine:
             if led_fmt is None or led_suit is None:
                 raise ValueError("Internal error: led format/suit not set.")
 
-            # Validate follow: get legal plays and ensure the chosen cards match
-            legal = get_legal_plays(player.hand, led_fmt, led_suit, ctx)
-            # A play is legal if it equals one of the legal options (as a multiset)
-            if not _cards_match_any(cards, legal):
+            # Validate follow: check invariants directly (allows any valid follow,
+            # not just the single arbitrary option returned by get_legal_plays)
+            if not is_valid_follow(cards, player.hand, led_fmt, led_suit, ctx):
                 raise ValueError(
-                    f"Illegal follow: {player_id!r} must play "
-                    f"{legal[0]!r} given the led format."
+                    f"Illegal follow: {player_id!r}'s play does not satisfy "
+                    "the following rules for the led format."
                 )
 
         # Remove cards from hand

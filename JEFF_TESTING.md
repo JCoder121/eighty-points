@@ -2,6 +2,123 @@
 
 ---
 
+## Important Notes
+
+### How to leverage Claude CLI for testing in future projects
+
+This is your first project using Claude CLI for end-to-end planning and implementation. Here is a practical guide for how to use Claude and its ecosystem more effectively for both backend and frontend testing on a web-based card game like this one.
+
+---
+
+#### Backend testing (pytest)
+
+The current setup is already well-structured — pytest with a real in-process FastAPI test client. Claude CLI can help you go further:
+
+**What to ask Claude to do directly:**
+- Write new pytest tests for edge cases you find during manual play. Just describe the bug ("Player A leads a single, follower's card is rejected") and Claude can write the regression test and the fix together in one pass — as it did for the follow-play validation bugs.
+- After any engine change, ask Claude to audit the test suite for gaps: "Are there cases in `tricks.py` that the current tests don't cover?" This works well because Claude can read the source and the tests side-by-side.
+- Use Claude to write `conftest.py` fixtures and shared helpers (e.g., `_setup_deal`) so that new tests stay short and focused.
+
+**Structured workflow that works well:**
+1. Write a failing test first (describe the expected behavior to Claude).
+2. Ask Claude to make it pass without breaking existing tests.
+3. Run `pytest` in the terminal and paste failures back if any arise.
+4. Repeat. Claude remembers the context within a session, so iteration is fast.
+
+**WebSocket integration tests** are the hardest to write by hand — they require careful message ordering and async coordination. Claude CLI is particularly useful here because it can reason about the full message sequence (as it did with the `_drain_until_phase` / `_next_of_type` helpers in M7). Be explicit: paste the sequence of messages you expect and let Claude scaffold the test around them.
+
+---
+
+#### Frontend testing (Playwright)
+
+[Playwright](https://playwright.dev/) is a browser automation library made by Microsoft. It lets you write Python (or JS/TypeScript) scripts that control a real browser — clicking buttons, reading the DOM, checking what appears on screen. For a WebSocket-based game like this, it is the right tool for end-to-end frontend tests.
+
+**How it fits this project:**
+
+```
+Playwright script
+  │
+  │  Opens 4 browser tabs (one per player)
+  │  Each tab connects to localhost:8000 over a real WebSocket
+  │  Script clicks buttons, reads displayed state, asserts expected outcomes
+  ▼
+uvicorn (running locally) ← your actual FastAPI + game engine
+```
+
+This tests the complete stack — Python engine, WebSocket handler, JavaScript rendering — all at once. It can catch bugs that unit tests miss (like the phase-string case mismatch that broke the lobby, or the Pass button not updating visually).
+
+**How to use Claude CLI with Playwright:**
+- Ask Claude to write Playwright tests given a description of a user flow. Example: "Write a Playwright test that opens 4 tabs, creates a room in the first, joins from the other three, and asserts that all four see the dealing phase begin."
+- Claude can read your `app.js` and generate selectors that match your actual DOM structure (`data-testid` attributes, class names, button text).
+- Add `data-testid="..."` attributes to key elements in `index.html` before writing tests — ask Claude to add them. This makes selectors stable even when CSS classes change.
+- Playwright has a codegen tool (`playwright codegen http://localhost:8000`) that records your manual clicks and generates a test script. You can paste that generated script to Claude and ask it to clean it up, add assertions, and parametrize it.
+
+**Recommended setup:**
+```bash
+pip install pytest-playwright
+playwright install chromium
+```
+Then Playwright tests live alongside your pytest suite and run with the same `pytest` command.
+
+---
+
+#### Claude Chrome Extension
+
+The [Claude chrome extension](https://chromewebstore.google.com/detail/claude-ai/ghbhpddlgkpamgnohekoghlicdopgmdb) is a different tool from Claude CLI — it lets you use Claude from within the browser, including highlighting elements on a webpage and asking questions about them. It is useful for:
+
+- **Visual debugging:** Open your game, highlight a broken UI element, and ask Claude "why is this card overlapping the trick area?" — Claude sees the page visually and can reason about CSS layout.
+- **One-off questions about the live page:** You can ask it to explain what a WebSocket message contains, or to look at the currently rendered DOM and identify a bug.
+- **Not a replacement for Playwright:** The Chrome extension is interactive and manual. Playwright is automated and repeatable. Use the extension for exploratory debugging; use Playwright for regression tests.
+
+---
+
+#### Summary: recommended testing workflow going forward
+
+| Layer | Tool | When to use |
+|---|---|---|
+| Game engine (pure Python) | pytest | After every engine change; Claude writes tests + fixes together |
+| WebSocket integration | pytest + TestClient | For message-sequence correctness; Claude scaffolds helpers |
+| Full browser E2E | Playwright | Before sharing with players; covers JS rendering + UX flows |
+| Visual/CSS debugging | Claude Chrome extension | Exploratory debugging of layout issues on a live local page |
+
+**The highest-leverage habit:** before starting any new milestone, ask Claude to draft a test plan alongside the implementation plan. The M8 "Pending Tests" section in PROGRESS.md was written after the fact; writing it first forces you to think about what "done" looks like and gives Claude a checklist to work from rather than discovering gaps during manual play.
+
+---
+
+### Mobile / cross-device experience is not designed for yet
+
+This game is intended to be played with friends across a mix of devices — phones, tablets,
+and laptops. The current frontend makes **no concessions for small screens or touch input**.
+This is a design decision that needs to be resolved before the game is shared with anyone.
+
+**What the current UI assumes:**
+- A reasonably wide screen (700 px+ for the hand area to spread out without wrapping awkwardly)
+- A mouse or trackpad for clicking small card elements (38 × 56 px each — tight on a phone touchscreen)
+- A keyboard is not required, but the card elements and buttons are sized for pointer devices
+
+**What happens on a phone today:**
+- The hand area wraps into multiple rows and may overflow or look cramped
+- Cards (38 × 56 px) are hard to tap accurately on a small touchscreen
+- The 3 × 3 trick grid shrinks but does not reflow — text may overlap
+- Bid buttons and the Pass button are usable but tightly spaced
+- There is no viewport scaling other than the `<meta name="viewport">` tag already present
+
+**Design options to consider:**
+
+| Option | Tradeoff |
+|---|---|
+| **Require laptop/desktop** | Simplest. Just tell your friends "use a computer." Eliminates the problem entirely for this version. |
+| **Responsive layout (CSS media queries)** | Moderate effort. Increase card sizes for touch, reflow the trick grid to vertical on narrow screens, make buttons finger-friendly (min 44 px tap targets per Apple/Google HIG). |
+| **Progressive Web App (PWA)** | Larger effort. Add a manifest + service worker so players can install the game to their phone home screen, giving a more native feel. Does not solve the layout problem on its own. |
+| **Separate mobile UI** | Most effort. A second simplified view tuned for small screens (e.g., scrollable hand, larger tap zones, collapsed trick area). |
+
+**Recommended path:** Make a deliberate choice before inviting players. If everyone can use
+a laptop for now, document that as the expectation and revisit responsiveness in a later
+milestone. If mobile support is required from day one, plan a CSS media-query pass before
+testing with real players.
+
+---
+
 ## Debugging
 
 ### After 4 players join, lobby shows "Game in progress..." and everything is stuck
@@ -18,6 +135,93 @@ This causes every phase check to fail silently:
 - `phase === "WAITING"` is always `false` → mode selector is always hidden, so the game master cannot select a mode and no game can ever start
 
 **Fix:** Change all phase string literals in `app.js` from uppercase to lowercase to match what the server sends.
+
+### Bidding bugs and UX issues discovered during first live dealing session
+
+Four issues found after the phase-string fix allowed dealing to work for the first time.
+
+**Issue 1 — Suit symbols too small; same-colour suits adjacent**
+
+Suit symbols (♠♥♦♣) in the hand were 13 px — hard to distinguish quickly.
+Also, the hand sort order was `[♠♥♦♣]`, placing hearts and diamonds (both red) adjacent,
+and spades and clubs (both black) adjacent — very easy to misread.
+
+*Fix:* `card-suit` font-size raised to 18 px. Hand sort order changed to `[♠♥♣♦]`
+(alternating black–red–black–red). Bid buttons updated to the same order.
+
+**Issue 2 — Single bid could overtake another single (wrong rule)**
+
+A player holding a single trump-rank card of suit A could overtake a single bid of suit B
+from a different player. The correct rule is: a single bid can only be beaten by a pair
+or better — the bidder has the best single until someone shows two cards.
+
+*Fix:* Removed the same-strength-single-overtake exception from `_can_overtake()` in the
+engine. Also updated `place_bid` in the handler to auto-add the bidder to
+`passed_in_bidding` so the 3 non-bidders' passes still trigger auto-close.
+
+**Issue 3 — Pass button not disabled after a player bids**
+
+A player who had placed a bid could still press "Pass", which made no logical sense
+(a bid is a commitment, not a suggestion).
+
+*Fix:* Pass button is now disabled when `gs.bids` contains the current player's ID.
+
+**Issue 4 — No visual confirmation that Pass was pressed**
+
+After clicking "Pass", the button looked identical. With 100 cards being slowly dealt,
+it was impossible to tell if the press registered.
+
+*Fix:* Added `S.hasPassed` tracking in frontend state. On press, the button immediately
+changes to `"Passed ✓"` with a green border/text style, stays that way until the next bid
+resets it (server clears pass tracking on each bid, so everyone must pass again).
+
+**Issue 5 — Trump-rank cards not visually distinguished during bidding; suit order updated**
+
+The hand during dealing showed all cards in a flat row with no indication of which cards
+were relevant for bidding. Players had to mentally scan for their trump-rank cards.
+Additionally, the suit display order was revised a second time to match the user's
+preferred fixed ordering (♦ ♣ ♥ ♠), and all trump-rank cards are now grouped together
+in a single block after bidding ends.
+
+*Bidding/dealing phase (DEALING + BIDDING_AFTER_DEAL):*
+- Hand is split into two sections separated by a gold dashed line:
+  - **Main group** (left): non-trump-rank, non-joker cards, sorted ♦ ♣ ♥ ♠ by rank
+  - **Highlighted group** (right, below separator): trump-rank cards of any suit + jokers,
+    sorted ♦ ♣ ♥ ♠ then small joker then big joker; rendered with gold border + warm tint
+- The trump rank label is shown in the separator text so the number is unmistakable
+- If a player has no trump-rank cards or jokers, the separator and highlighted group
+  are omitted entirely
+
+*After bidding (BOTTOM_EXCHANGE and beyond):*
+- Highlighted section merges back into a single sorted hand automatically
+- All trump-rank cards (any suit) are grouped together in one contiguous block,
+  sub-sorted off-suit first (♦ ♣ ♥ ♠ order), on-suit trump rank last
+- Trump-suit non-rank cards appear immediately left of the trump-rank block
+- Jokers are rightmost
+
+*Suit display order:* ♦ ♣ ♥ ♠ everywhere (alternating red/black). Bid buttons match.
+
+### Follow-play validation rejects valid cards (two bugs found during play-testing)
+
+**Bug 1 — Any suited single must be allowed to follow a single lead**
+
+Observed: Player A leads A♥ (non-trump suit, clubs is trump). Player B tries to play 4♥ — the engine rejects it as illegal, even though 4♥ is a valid heart.
+
+Root cause: `get_legal_plays` for a single lead returns `[suited[0]]` — only the first card in the suited list. The engine then checks `_cards_match_any(proposed, legal)`, which rejects any card other than that specific arbitrary first card.
+
+**Bug 2 — Any 2 suited singles must be allowed to follow a pair lead when no pair is available**
+
+Observed: Player A leads A♥A♥ (pair). Player B has no hearts pair. Playing 4♥+5♥ is rejected, but 10♥+J♥ is accepted — even though both are equally valid (no pair available, any two hearts suffice).
+
+Root cause: `_match_group` for a degraded pair (no group of size k) iterates `sorted(groups.values(), ...)` and returns exactly one arbitrary combination of 2 suited cards. Any other combination fails `_cards_match_any`.
+
+*Fix:* Added `is_valid_follow(proposed, hand, led_format, led_suit, ctx)` to `tricks.py`. Instead of comparing against one arbitrary option, it checks invariants directly:
+- Must play as many suited cards as possible
+- For Single: any one suited card is valid
+- For IdenticalGroup(k): if hand has a group of k, proposed must include one; otherwise any k suited singles are valid
+- For Tractor/Throw: falls back to `get_legal_plays` comparison (complex ordering rules still apply)
+
+Both `engine.py` (play_cards) and `handler.py` (validate_play) now call `is_valid_follow` instead of the old `get_legal_plays + _cards_match_any` pattern.
 
 ---
 

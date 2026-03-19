@@ -4,6 +4,88 @@ Questions, observations, and answers collected during manual testing.
 
 ---
 
+## 5. Capacity, scaling, and fault tolerance
+
+### How many rooms can the server support right now?
+
+There is no hardcoded room limit. In practice, the ceiling is set by three resources
+on whatever machine uvicorn is running on:
+
+| Resource | What it limits | Rough rule of thumb |
+|---|---|---|
+| **RAM** | Number of rooms in memory | Each room holds 4 player hands (~108 cards) + game state. A room is well under 1 MB of Python objects. A $6/mo VPS with 1 GB RAM could hold thousands of simultaneous rooms before RAM is the bottleneck. |
+| **Open file descriptors** | Number of WebSocket connections | Each WebSocket is an open OS file descriptor. Default Linux limits are ~1,024 per process (tunable to 65,536+). At 4 connections per room that's ~16,000 rooms on a tuned system. |
+| **asyncio event loop** | Message throughput | We use a single-process asyncio event loop. It can handle many concurrent WebSocket connections as long as no single handler blocks it. Our game logic is fast CPU-wise, so this is not a bottleneck in practice. |
+
+**Short answer:** For a casual card game among friends, a single cheap VPS handles
+hundreds to thousands of simultaneous rooms easily. You are unlikely to hit any limit.
+
+### How do I scale out if I need more capacity?
+
+This is where the current architecture has a known constraint: **all game state lives
+in the `RoomManager` dict in one Python process**. You cannot simply spin up a second
+server and load-balance across both, because a room on server A is invisible to server B.
+
+The standard solution is to move shared state out of the process:
+
+```
+Before (current):
+  Server A: RoomManager (in-memory dict)
+
+After (scaled):
+  Server A ──┐
+  Server B ──┼──► Redis (shared room state + pub/sub for WebSocket messages)
+  Server C ──┘
+```
+
+**Step-by-step path to horizontal scaling:**
+1. Replace the in-memory `RoomManager` dict with **Redis** (a fast in-memory database
+   that all server instances can share)
+2. Use Redis pub/sub to forward WebSocket messages between servers (so a message from
+   a player on Server A reaches players on Server B)
+3. Put a load balancer (nginx, Caddy, or a cloud LB) in front with **sticky sessions**
+   disabled — any server can handle any request once Redis holds the state
+
+This is well-understood but non-trivial work. For a game played among friends it is
+almost certainly unnecessary — start with one server and only add this complexity if
+you actually hit capacity limits.
+
+### What is fault tolerance like?
+
+**Currently: none.** This is an intentional tradeoff documented in the implementation
+plan's "Future Todos." Specifically:
+
+- **Server restart = all rooms lost.** Game state is only in RAM. If uvicorn crashes or
+  the machine reboots, every active game disappears. Players would see a "Disconnected"
+  overlay and have to start over.
+- **Player disconnect = room destroyed.** If any one of the 4 players loses their
+  connection (closes the tab, WiFi drops), the server immediately sends `game_aborted`
+  to the other 3 and tears down the room. There is no reconnect grace period.
+- **No persistence.** There is no database. Completed game history is not stored
+  anywhere (the `.jsonl` logging described in M9 would give you a file-based audit
+  trail, but not full game restoration).
+
+**How you would improve this (in order of effort):**
+
+1. **Reconnect grace period** (medium effort) — instead of immediately aborting on
+   disconnect, pause the game for 60 seconds and let the player rejoin with the same
+   `player_id`. The game log snapshots are already designed to support this.
+
+2. **Persist game state to Redis or SQLite** (medium effort) — serialize `GameState`
+   to JSON after every action and write it to a store. On server restart, reload active
+   rooms from the store. This makes the server restart-safe.
+
+3. **Multi-server redundancy** (high effort) — run 2+ server instances behind a load
+   balancer. If one crashes, the load balancer routes new connections to the others.
+   Existing connections on the crashed server are still lost (WebSockets are stateful),
+   but the system recovers quickly and rooms persisted in Redis survive.
+
+**Bottom line:** For playing with friends, the current setup is perfectly fine. The
+worst case is a dropped connection forces everyone to start a new game — annoying but
+not catastrophic.
+
+---
+
 ## 4. Why localhost:8000 works now, and what it takes to go live
 
 ### Why it works on your machine right now

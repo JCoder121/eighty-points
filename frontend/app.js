@@ -204,7 +204,7 @@ function handleGameState(msg) {
   S.gameState = msg;
 
   // Auto-dismiss round-over overlay when a new round starts dealing
-  if (msg.phase === "DEALING" && _roundOverlayTimer !== null) {
+  if (msg.phase === "dealing" && _roundOverlayTimer !== null) {
     clearTimeout(_roundOverlayTimer);
     _roundOverlayTimer = null;
     hideOverlay();
@@ -212,8 +212,8 @@ function handleGameState(msg) {
 
   // Transition screens
   const gamePhases = [
-    "DEALING", "BIDDING_AFTER_DEAL", "BOTTOM_EXCHANGE",
-    "FRIEND_DECLARATION", "PLAYING", "SCORING", "ROUND_OVER", "GAME_OVER",
+    "dealing", "bidding_after_deal", "bottom_exchange",
+    "friend_declaration", "playing", "scoring", "round_over", "game_over",
   ];
   if (gamePhases.includes(msg.phase)) {
     showScreen("screen-game");
@@ -338,7 +338,7 @@ function renderLobby() {
   const ru     = S.roomUpdate;
   const gs     = S.gameState;
   const mode   = gs ? gs.mode : null;
-  const phase  = gs ? gs.phase : "WAITING";
+  const phase  = gs ? gs.phase : "waiting";
   const n      = ru.players.length;
 
   // Player list (4 slots)
@@ -369,7 +369,7 @@ function renderLobby() {
 
   // Status text
   const statusEl = document.getElementById("lobby-status");
-  if (phase !== "WAITING") {
+  if (phase !== "waiting") {
     statusEl.textContent = "Game in progress...";
   } else if (n < 4) {
     statusEl.textContent = `Waiting for players... (${n}/4 joined)`;
@@ -383,7 +383,7 @@ function renderLobby() {
 
   // Mode selector (game master only)
   const modeDiv = document.getElementById("mode-selector");
-  if (S.isGameMaster && phase === "WAITING") {
+  if (S.isGameMaster && phase === "waiting") {
     modeDiv.classList.remove("hidden");
     document.getElementById("btn-upgrade").classList.toggle("active", mode === "upgrade");
     document.getElementById("btn-find-friends").classList.toggle("active", mode === "find_friends");
@@ -414,7 +414,7 @@ function renderGame(gs) {
 
 function renderRoundInfo(gs) {
   let text = `Round ${gs.round_number}`;
-  if (gs.phase === "PLAYING" || gs.phase === "SCORING") {
+  if (gs.phase === "playing" || gs.phase === "scoring") {
     text += ` · Trick ${gs.trick_number}`;
   }
   text += ` · ${gs.phase}`;
@@ -464,7 +464,7 @@ function renderTrickArea(gs) {
 
   // Center status
   const statusEl = document.getElementById("trick-status");
-  if (gs.phase === "PLAYING") {
+  if (gs.phase === "playing") {
     const cp = gs.players.find(p => p.id === gs.current_turn_id);
     statusEl.textContent = cp
       ? (cp.id === S.playerId ? "Your turn!" : `${cp.name}'s turn`)
@@ -504,7 +504,7 @@ function renderHand(gs) {
   }
 
   const phase      = gs.phase;
-  const isExchange = phase === "BOTTOM_EXCHANGE" && Array.isArray(gs.bottom_deck);
+  const isExchange = phase === "bottom_exchange" && Array.isArray(gs.bottom_deck);
 
   // Combine cards for display (33 during exchange, 25 otherwise)
   const handCards   = me.hand.map((card, i) => ({ card, key: `hand:${i}` }));
@@ -514,9 +514,9 @@ function renderHand(gs) {
   const allDisplay = [...handCards, ...bottomCards];
 
   const canSelect = (
-    phase === "PLAYING" ||
-    phase === "BOTTOM_EXCHANGE" ||
-    phase === "FRIEND_DECLARATION"
+    phase === "playing" ||
+    phase === "bottom_exchange" ||
+    phase === "friend_declaration"
   );
 
   const total = allDisplay.length;
@@ -551,7 +551,7 @@ function renderHand(gs) {
 
 function onCardClick(key, el, gs) {
   const phase = gs.phase;
-  if (phase === "PLAYING") {
+  if (phase === "playing") {
     if (S.selectedKeys.has(key)) {
       S.selectedKeys.delete(key);
       el.classList.remove("selected");
@@ -565,7 +565,7 @@ function onCardClick(key, el, gs) {
       playBtn.disabled = S.selectedKeys.size === 0 || S.awaitingValidation
         || gs.current_turn_id !== S.playerId;
     }
-  } else if (phase === "BOTTOM_EXCHANGE") {
+  } else if (phase === "bottom_exchange") {
     if (S.selectedKeys.has(key)) {
       S.selectedKeys.delete(key);
       el.classList.remove("selected");
@@ -671,22 +671,22 @@ function renderActionArea(gs) {
   area.innerHTML = "";
 
   const phase = gs.phase;
-  if (phase === "DEALING" || phase === "BIDDING_AFTER_DEAL") {
+  if (phase === "dealing" || phase === "bidding_after_deal") {
     renderBidArea(area, gs);
-  } else if (phase === "BOTTOM_EXCHANGE") {
+  } else if (phase === "bottom_exchange") {
     renderBottomExchange(area, gs);
-  } else if (phase === "FRIEND_DECLARATION") {
+  } else if (phase === "friend_declaration") {
     renderFriendDeclaration(area, gs);
-  } else if (phase === "PLAYING") {
+  } else if (phase === "playing") {
     renderPlayArea(area, gs);
   } else {
     const p = document.createElement("p");
     p.style.color = "#666";
     p.textContent = {
-      SCORING:    "Scoring in progress...",
-      ROUND_OVER: "Round over — next round starting...",
-      GAME_OVER:  "Game over.",
-      WAITING:    "In lobby...",
+      scoring:    "Scoring in progress...",
+      round_over: "Round over — next round starting...",
+      game_over:  "Game over.",
+      waiting:    "In lobby...",
     }[phase] || phase;
     area.appendChild(p);
   }
@@ -757,7 +757,7 @@ function renderBidArea(area, gs) {
   // Pass / close bidding
   const ctrlRow = document.createElement("div");
   ctrlRow.className = "action-row";
-  if (gs.phase === "BIDDING_AFTER_DEAL") {
+  if (gs.phase === "bidding_after_deal") {
     const passBtn = document.createElement("button");
     passBtn.textContent = "Pass";
     passBtn.addEventListener("click", () => sendWS({ action: "pass_bid" }));
@@ -775,7 +775,7 @@ function renderBidArea(area, gs) {
   const prog = document.createElement("div");
   prog.style.cssText = "font-size:12px;color:#555;text-align:center;";
   const dealt = gs.cards_dealt_count || 0;
-  prog.textContent = gs.phase === "DEALING"
+  prog.textContent = gs.phase === "dealing"
     ? `Dealing... ${dealt}/100 cards`
     : "All 100 cards dealt — bidding phase.";
   area.appendChild(prog);

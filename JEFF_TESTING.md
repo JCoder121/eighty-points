@@ -1,5 +1,28 @@
 # Jeff's Testing Notes
 
+---
+
+## Debugging
+
+### After 4 players join, lobby shows "Game in progress..." and everything is stuck
+
+**Observed behavior:** After simulating 4 players joining the lobby, all 4 browser windows show "Game in progress..." in the lobby status area and nothing else happens. The game never starts and no UI transitions occur.
+
+**Root cause:** Phase string case mismatch between server and frontend.
+
+The Python `GamePhase` enum stores **lowercase** string values (`"waiting"`, `"dealing"`, `"bidding_after_deal"`, etc.) and the server sends these lowercase values in every `game_state` message via `self.phase.value`. However, `app.js` compares phases against **uppercase** strings (`"WAITING"`, `"DEALING"`, etc.) everywhere.
+
+This causes every phase check to fail silently:
+- `phase !== "WAITING"` is always `true` (since `"waiting" !== "WAITING"`) → shows "Game in progress..." immediately, even in the lobby before the game starts
+- `gamePhases.includes(msg.phase)` always returns `false` → frontend never transitions to the game screen
+- `phase === "WAITING"` is always `false` → mode selector is always hidden, so the game master cannot select a mode and no game can ever start
+
+**Fix:** Change all phase string literals in `app.js` from uppercase to lowercase to match what the server sends.
+
+---
+
+## Q&A
+
 Questions, observations, and answers collected during manual testing.
 
 ---

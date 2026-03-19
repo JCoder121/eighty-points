@@ -4,6 +4,87 @@
 
 ## Important Notes
 
+### How to leverage Claude CLI for testing in future projects
+
+This is your first project using Claude CLI for end-to-end planning and implementation. Here is a practical guide for how to use Claude and its ecosystem more effectively for both backend and frontend testing on a web-based card game like this one.
+
+---
+
+#### Backend testing (pytest)
+
+The current setup is already well-structured — pytest with a real in-process FastAPI test client. Claude CLI can help you go further:
+
+**What to ask Claude to do directly:**
+- Write new pytest tests for edge cases you find during manual play. Just describe the bug ("Player A leads a single, follower's card is rejected") and Claude can write the regression test and the fix together in one pass — as it did for the follow-play validation bugs.
+- After any engine change, ask Claude to audit the test suite for gaps: "Are there cases in `tricks.py` that the current tests don't cover?" This works well because Claude can read the source and the tests side-by-side.
+- Use Claude to write `conftest.py` fixtures and shared helpers (e.g., `_setup_deal`) so that new tests stay short and focused.
+
+**Structured workflow that works well:**
+1. Write a failing test first (describe the expected behavior to Claude).
+2. Ask Claude to make it pass without breaking existing tests.
+3. Run `pytest` in the terminal and paste failures back if any arise.
+4. Repeat. Claude remembers the context within a session, so iteration is fast.
+
+**WebSocket integration tests** are the hardest to write by hand — they require careful message ordering and async coordination. Claude CLI is particularly useful here because it can reason about the full message sequence (as it did with the `_drain_until_phase` / `_next_of_type` helpers in M7). Be explicit: paste the sequence of messages you expect and let Claude scaffold the test around them.
+
+---
+
+#### Frontend testing (Playwright)
+
+[Playwright](https://playwright.dev/) is a browser automation library made by Microsoft. It lets you write Python (or JS/TypeScript) scripts that control a real browser — clicking buttons, reading the DOM, checking what appears on screen. For a WebSocket-based game like this, it is the right tool for end-to-end frontend tests.
+
+**How it fits this project:**
+
+```
+Playwright script
+  │
+  │  Opens 4 browser tabs (one per player)
+  │  Each tab connects to localhost:8000 over a real WebSocket
+  │  Script clicks buttons, reads displayed state, asserts expected outcomes
+  ▼
+uvicorn (running locally) ← your actual FastAPI + game engine
+```
+
+This tests the complete stack — Python engine, WebSocket handler, JavaScript rendering — all at once. It can catch bugs that unit tests miss (like the phase-string case mismatch that broke the lobby, or the Pass button not updating visually).
+
+**How to use Claude CLI with Playwright:**
+- Ask Claude to write Playwright tests given a description of a user flow. Example: "Write a Playwright test that opens 4 tabs, creates a room in the first, joins from the other three, and asserts that all four see the dealing phase begin."
+- Claude can read your `app.js` and generate selectors that match your actual DOM structure (`data-testid` attributes, class names, button text).
+- Add `data-testid="..."` attributes to key elements in `index.html` before writing tests — ask Claude to add them. This makes selectors stable even when CSS classes change.
+- Playwright has a codegen tool (`playwright codegen http://localhost:8000`) that records your manual clicks and generates a test script. You can paste that generated script to Claude and ask it to clean it up, add assertions, and parametrize it.
+
+**Recommended setup:**
+```bash
+pip install pytest-playwright
+playwright install chromium
+```
+Then Playwright tests live alongside your pytest suite and run with the same `pytest` command.
+
+---
+
+#### Claude Chrome Extension
+
+The [Claude chrome extension](https://chromewebstore.google.com/detail/claude-ai/ghbhpddlgkpamgnohekoghlicdopgmdb) is a different tool from Claude CLI — it lets you use Claude from within the browser, including highlighting elements on a webpage and asking questions about them. It is useful for:
+
+- **Visual debugging:** Open your game, highlight a broken UI element, and ask Claude "why is this card overlapping the trick area?" — Claude sees the page visually and can reason about CSS layout.
+- **One-off questions about the live page:** You can ask it to explain what a WebSocket message contains, or to look at the currently rendered DOM and identify a bug.
+- **Not a replacement for Playwright:** The Chrome extension is interactive and manual. Playwright is automated and repeatable. Use the extension for exploratory debugging; use Playwright for regression tests.
+
+---
+
+#### Summary: recommended testing workflow going forward
+
+| Layer | Tool | When to use |
+|---|---|---|
+| Game engine (pure Python) | pytest | After every engine change; Claude writes tests + fixes together |
+| WebSocket integration | pytest + TestClient | For message-sequence correctness; Claude scaffolds helpers |
+| Full browser E2E | Playwright | Before sharing with players; covers JS rendering + UX flows |
+| Visual/CSS debugging | Claude Chrome extension | Exploratory debugging of layout issues on a live local page |
+
+**The highest-leverage habit:** before starting any new milestone, ask Claude to draft a test plan alongside the implementation plan. The M8 "Pending Tests" section in PROGRESS.md was written after the fact; writing it first forces you to think about what "done" looks like and gives Claude a checklist to work from rather than discovering gaps during manual play.
+
+---
+
 ### Mobile / cross-device experience is not designed for yet
 
 This game is intended to be played with friends across a mix of devices — phones, tablets,

@@ -500,6 +500,46 @@ function renderPoints(gs) {
     atk >= 200 ? "200+ (scoring!)" : `${toScore} to 200`;
 }
 
+// ── Hand rendering helpers ────────────────────────────────────────────────
+
+function isJoker(card) {
+  return card.rank === "small_joker" || card.rank === "big_joker";
+}
+
+// Return the trump rank string (e.g. "7") from the game state.
+// Works before any bid is placed by reading the round leader's current rank.
+function getTrumpRank(gs) {
+  if (gs.trump_context && gs.trump_context.trump_rank) {
+    return gs.trump_context.trump_rank;
+  }
+  // Before a bid: current_leader_id == round_leader_id (set in start_dealing).
+  const leader = gs.players.find(p => p.id === gs.current_leader_id);
+  return leader ? leader.rank : null;
+}
+
+// Sort for the bidding-phase main group: ♦ ♣ ♥ ♠ left-to-right, rank ascending.
+function sortBiddingMain(items) {
+  const SUITS = ["diamonds", "clubs", "hearts", "spades"];
+  return [...items].sort((a, b) => {
+    const sd = SUITS.indexOf(a.card.suit) - SUITS.indexOf(b.card.suit);
+    if (sd !== 0) return sd;
+    return RANK_ORDER.indexOf(a.card.rank) - RANK_ORDER.indexOf(b.card.rank);
+  });
+}
+
+// Sort for the bidding-phase highlighted group:
+// trump-rank cards by ♦ ♣ ♥ ♠ order, then small joker, then big joker.
+function sortBiddingHighlight(items) {
+  const SUITS = ["diamonds", "clubs", "hearts", "spades"];
+  return [...items].sort((a, b) => {
+    const aJ = isJoker(a.card), bJ = isJoker(b.card);
+    if (aJ && bJ) return (a.card.rank === "big_joker" ? 1 : 0) - (b.card.rank === "big_joker" ? 1 : 0);
+    if (aJ) return 1;
+    if (bJ) return -1;
+    return SUITS.indexOf(a.card.suit) - SUITS.indexOf(b.card.suit);
+  });
+}
+
 // ── Hand rendering ────────────────────────────────────────────────────────
 
 // During BOTTOM_EXCHANGE, the round leader sees their hand + the 8 bottom cards
@@ -518,34 +558,72 @@ function renderHand(gs) {
   }
 
   const phase      = gs.phase;
+  const isBidding  = phase === "dealing" || phase === "bidding_after_deal";
   const isExchange = phase === "bottom_exchange" && Array.isArray(gs.bottom_deck);
 
-  // Combine cards for display (33 during exchange, 25 otherwise)
-  const handCards   = me.hand.map((card, i) => ({ card, key: `hand:${i}` }));
-  const bottomCards = isExchange
-    ? (gs.bottom_deck || []).map((card, i) => ({ card, key: `bot:${i}` }))
-    : [];
-  const allDisplay = [...handCards, ...bottomCards];
+  const handCards = me.hand.map((card, i) => ({ card, key: `hand:${i}` }));
 
+  // ── DEALING / BIDDING phase: split hand into main + highlighted sections ──
+  if (isBidding) {
+    const trumpRank = getTrumpRank(gs);
+
+    // Main group: non-trump-rank, non-joker cards.
+    // Highlighted group: trump-rank cards (any suit) + jokers.
+    const mainItems      = handCards.filter(({ card }) =>
+      !isJoker(card) && (trumpRank === null || card.rank !== trumpRank)
+    );
+    const highlightItems = handCards.filter(({ card }) =>
+      isJoker(card) || (trumpRank !== null && card.rank === trumpRank)
+    );
+
+    handHeader.textContent = `Your hand (${handCards.length} cards)`;
+
+    // Render main group: ♦ ♣ ♥ ♠ sorted by rank
+    for (const { card } of sortBiddingMain(mainItems)) {
+      handArea.appendChild(makeCardEl(card, false));
+    }
+
+    // Render highlighted trump-rank group (only if non-empty)
+    if (highlightItems.length > 0) {
+      const rankLabel = trumpRank ? rankDisplay(trumpRank) : "?";
+      const sep = document.createElement("div");
+      sep.className = "hand-trump-sep";
+      sep.textContent = `— rank ${rankLabel} cards (trump rank — bid these!) —`;
+      handArea.appendChild(sep);
+
+      for (const { card } of sortBiddingHighlight(highlightItems)) {
+        const el = makeCardEl(card, false);
+        el.classList.add("trump-highlight");
+        handArea.appendChild(el);
+      }
+    }
+    return;
+  }
+
+  // ── All other phases: single sorted group ──
   const canSelect = (
     phase === "playing" ||
     phase === "bottom_exchange" ||
     phase === "friend_declaration"
   );
 
+  // During BOTTOM_EXCHANGE the leader sees hand + bottom deck (33 cards).
+  const bottomCards = isExchange
+    ? (gs.bottom_deck || []).map((card, i) => ({ card, key: `bot:${i}` }))
+    : [];
+  const allDisplay = [...handCards, ...bottomCards];
+
   const total = allDisplay.length;
   handHeader.textContent = isExchange
     ? `Your hand + bottom deck (${total} cards) — select 8 to put back`
     : `Your hand (${total} cards)`;
 
-  // Sort combined set; bottom deck cards rendered after hand cards
   const sorted = sortCardSet(allDisplay, gs.trump_context);
 
   for (const { card, key } of sorted) {
     const el = makeCardEl(card, canSelect);
 
-    // Mark bottom deck cards with a subtle indicator (no opacity change
-    // because selected state would look dim; use the ⊕ badge instead)
+    // Mark bottom deck cards with a subtle indicator (⊕ badge in corner)
     if (key.startsWith("bot:")) {
       el.title = "Bottom deck card — can be put back";
       const badge = document.createElement("span");

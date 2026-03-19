@@ -329,6 +329,47 @@ class TestValidateThrow:
         }
         assert self._throw(throw_cards, all_hands)
 
+    def test_throw_akk_valid_when_thrower_holds_the_ace(self):
+        """A♦ + K♦K♦ throw: thrower holds the only A♦ so no opponent has A♦A♦
+        to beat the pair, and no single card outranks A♦ — throw is valid."""
+        A_D2 = _c(Suit.DIAMONDS, Rank.ACE)   # same card, different object
+        K_D2 = _c(Suit.DIAMONDS, Rank.KING)
+        throw_cards = [A_D2, K_D2, K_D2]
+        all_hands = {
+            "p0": throw_cards,
+            "p1": [A_D],  # opponent has ONE A♦ — not a pair, so can't beat K♦K♦
+            "p2": [],
+            "p3": [],
+        }
+        assert self._throw(throw_cards, all_hands)
+
+    def test_throw_akk_invalid_when_opponent_has_pair_beating_the_pair(self):
+        """A♦ + K♦K♦ throw is invalid if an opponent holds A♦A♦ (pair beats pair)."""
+        A_D2 = _c(Suit.DIAMONDS, Rank.ACE)
+        K_D2 = _c(Suit.DIAMONDS, Rank.KING)
+        throw_cards = [A_D2, K_D2, K_D2]
+        all_hands = {
+            "p0": throw_cards,
+            "p1": [A_D, A_D],  # opponent has A♦A♦ — beats K♦K♦ pair
+            "p2": [],
+            "p3": [],
+        }
+        assert not self._throw(throw_cards, all_hands)
+
+    def test_throw_aak_valid_pair_aces_unbeatable(self):
+        """A♦A♦ + K♦ throw: pair of aces is unbeatable; single K♦ is safe because
+        thrower holds both aces and no opponent can have A♦."""
+        A_D2 = _c(Suit.DIAMONDS, Rank.ACE)
+        K_D2 = _c(Suit.DIAMONDS, Rank.KING)
+        throw_cards = [A_D2, A_D2, K_D2]
+        all_hands = {
+            "p0": throw_cards,   # both A♦s are with the thrower
+            "p1": [],
+            "p2": [],
+            "p3": [],
+        }
+        assert self._throw(throw_cards, all_hands)
+
 
 # ---------------------------------------------------------------------------
 # Dynamic adjacency (from plan: trump rank 4, 9, 3, 2)

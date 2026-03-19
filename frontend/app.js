@@ -508,10 +508,11 @@ function isJoker(card) {
 }
 
 // Return true if card is a trump card given the resolved trump context.
-// Covers: jokers, trump-rank cards (any suit), and trump-suit cards (if a suit is set).
+// Jokers are ALWAYS trump regardless of context.
+// Also covers trump-rank cards (any suit) and trump-suit cards (if a suit is set).
 function isTrumpCard(card, trumpContext) {
-  if (!trumpContext) return false;
   if (isJoker(card)) return true;
+  if (!trumpContext) return false;
   if (trumpContext.trump_rank && card.rank === trumpContext.trump_rank) return true;
   if (trumpContext.trump_suit && card.suit === trumpContext.trump_suit) return true;
   return false;

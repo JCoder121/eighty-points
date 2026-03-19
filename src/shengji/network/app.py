@@ -29,7 +29,7 @@ from shengji.network.room import RoomManager
 from shengji.superuser.api import SuperuserRoom
 
 # Seconds between dealt cards in production.  Override to 0 in tests.
-DEAL_DELAY_SECONDS: float = 0.5
+DEAL_DELAY_SECONDS: float = 0.25
 
 
 # ---------------------------------------------------------------------------

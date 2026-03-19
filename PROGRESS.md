@@ -4,6 +4,53 @@ Newest entries at the top.
 
 ---
 
+## Session 12 — Bug Fixes: Joker Highlighting, Throw Validation, Deal Delay
+
+**Status:** Complete. 515 tests passing.
+
+**Branch:** `fix/bidding-close-and-bugs`
+
+### Fix 6 — Jokers always highlighted regardless of trump context (frontend)
+
+- `isTrumpCard()` checked `!trumpContext` before `isJoker()`, so jokers
+  were not highlighted when `trump_context` was null (e.g., during the
+  dealing phase before a bid is placed).  Moved the joker check first
+  so jokers are always treated as trump regardless of context.
+
+### Fix 7 — Throw validation: pair components require a pair to beat (engine)
+
+Two bugs in the old `validate_throw`:
+
+1. **Wrong card assignment:** `_extract_component_cards` extracted cards
+   in ascending card_order order, so for an A♦+K♦K♦ throw it assigned
+   K♦ as the "single" and K♦K♦ as the pair — then checked whether any
+   opponent could beat a single K♦ with any higher card, incorrectly
+   invalidating the throw when an opponent held one A♦.
+
+2. **Wrong beat check:** For IdenticalGroup components, the check compared
+   individual card strengths.  A single A♦ was treated as able to "beat"
+   a K♦K♦ pair, which violates the rule: you need a PAIR to beat a pair.
+
+**Fix:** Rewrote `validate_throw` with two new helpers:
+- `_assign_throw_components`: correctly maps throw cards to components
+  (tractors first, then IdenticalGroups by highest group, then singles)
+  so A♦+K♦K♦ is correctly seen as pair=K♦K♦, single=A♦.
+- `_single_opp_beats_component`: checks per-opponent (not pooled) and
+  format-aware: a Single is beaten by any higher card; an IdenticalGroup(k)
+  requires the opponent to have k cards at the same position with higher
+  rank; a Tractor requires a matching-size tractor.
+
+Result: A♦+K♦K♦ and A♦A♦+K♦ throws are now correctly valid when the
+thrower holds enough aces to prevent opponents from forming a beating pair.
+3 new regression tests added.
+
+### Fix 8 — Deal delay reduced from 0.5 s to 0.25 s (backend)
+
+- `DEAL_DELAY_SECONDS` in `app.py` changed from 0.5 to 0.25.  100 cards
+  now take ~25 s to deal rather than ~50 s.
+
+---
+
 ## Session 11 — Bug Fixes: Bidding Design, Mode Selector, Trump Highlighting, Trick Resolution
 
 **Status:** Complete. 512 tests passing.

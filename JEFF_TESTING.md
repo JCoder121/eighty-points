@@ -19,6 +19,45 @@ This causes every phase check to fail silently:
 
 **Fix:** Change all phase string literals in `app.js` from uppercase to lowercase to match what the server sends.
 
+### Bidding bugs and UX issues discovered during first live dealing session
+
+Four issues found after the phase-string fix allowed dealing to work for the first time.
+
+**Issue 1 — Suit symbols too small; same-colour suits adjacent**
+
+Suit symbols (♠♥♦♣) in the hand were 13 px — hard to distinguish quickly.
+Also, the hand sort order was `[♠♥♦♣]`, placing hearts and diamonds (both red) adjacent,
+and spades and clubs (both black) adjacent — very easy to misread.
+
+*Fix:* `card-suit` font-size raised to 18 px. Hand sort order changed to `[♠♥♣♦]`
+(alternating black–red–black–red). Bid buttons updated to the same order.
+
+**Issue 2 — Single bid could overtake another single (wrong rule)**
+
+A player holding a single trump-rank card of suit A could overtake a single bid of suit B
+from a different player. The correct rule is: a single bid can only be beaten by a pair
+or better — the bidder has the best single until someone shows two cards.
+
+*Fix:* Removed the same-strength-single-overtake exception from `_can_overtake()` in the
+engine. Also updated `place_bid` in the handler to auto-add the bidder to
+`passed_in_bidding` so the 3 non-bidders' passes still trigger auto-close.
+
+**Issue 3 — Pass button not disabled after a player bids**
+
+A player who had placed a bid could still press "Pass", which made no logical sense
+(a bid is a commitment, not a suggestion).
+
+*Fix:* Pass button is now disabled when `gs.bids` contains the current player's ID.
+
+**Issue 4 — No visual confirmation that Pass was pressed**
+
+After clicking "Pass", the button looked identical. With 100 cards being slowly dealt,
+it was impossible to tell if the press registered.
+
+*Fix:* Added `S.hasPassed` tracking in frontend state. On press, the button immediately
+changes to `"Passed ✓"` with a green border/text style, stays that way until the next bid
+resets it (server clears pass tracking on each bid, so everyone must pass again).
+
 ---
 
 ## Q&A

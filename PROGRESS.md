@@ -4,6 +4,55 @@ Newest entries at the top.
 
 ---
 
+## Session 10 — Bug Fix: Bidding UX and Rules
+
+**Status:** Complete. 499 tests still passing.
+
+**Branch:** `fix/bidding-ux-and-rules`
+
+Four bugs/UX issues discovered during manual testing after M8.
+
+### Fix 1 — Larger suit symbols + non-adjacent suit colours (frontend)
+
+- `.card .card-suit` font-size increased `13px → 18px` so ♠♥♣♦ symbols
+  are clearly readable at a glance.
+- Suit order in hand (and bid buttons) changed from `[♠♥♦♣]` to `[♠♥♣♦]`
+  (black–red–black–red alternating). Previously hearts and diamonds (both
+  red) were adjacent, making them hard to distinguish. Updated in both
+  `cardSortKey` (hand sort) and `renderBidArea` (bid suit buttons).
+
+### Fix 2 — Bidding overtake rule: single cannot beat single (engine + handler + tests)
+
+- **Bug:** `_can_overtake` allowed a single trump-rank card from a different
+  player to overtake another single. The correct rule is that a single can
+  only be beaten by a strictly stronger bid (pair or joker pair).
+- **Fix:** Removed the `new_str == cur_str == 1 and different player` exception
+  from `_can_overtake`. Now only `new_str > cur_str` returns True.
+- **Handler change:** When a bid is placed, the bidder is immediately added to
+  `passed_in_bidding` (as if they auto-passed themselves). Without this,
+  auto-close could never trigger after a bid since the bidder's Pass button
+  is disabled (Fix 3). With it, only the remaining 3 players need to pass
+  for auto-close.
+- Updated 3 tests in `test_bidding.py` to match corrected semantics.
+
+### Fix 3 — Pass button disabled after the player has bid (frontend)
+
+- If `gs.bids.some(b => b.player_id === S.playerId)`, the Pass button is
+  disabled. A player who has placed a bid cannot take it back by passing.
+  Players who have only passed (no bid) can still pass again after another
+  player raises the bid.
+
+### Fix 4 — Pass button visual feedback (frontend)
+
+- Added `S.hasPassed` and `S.lastBidsCount` to app state.
+- On press: immediately changes button to `"Passed ✓"` with a green CSS
+  class `btn-passed` (green border + text, opacity:1 so it stays visible).
+- `S.hasPassed` resets in `handleGameState` when `bids.length` increases
+  (server cleared passed_in_bidding after a new bid, so all must pass
+  again) or when phase transitions to `"dealing"` (new round).
+
+---
+
 ## Session 9 — M8 Frontend
 
 **Status:** M8 complete. 499 tests passing (no new backend tests for M8 per spec).

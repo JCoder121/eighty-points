@@ -52,6 +52,10 @@ const S = {
 
   // Waiting for play_valid/play_invalid from server?
   awaitingValidation: false,
+
+  // Bidding state — reset when a new bid is placed or a new deal starts.
+  hasPassed:     false,  // true once this player has pressed Pass this round
+  lastBidsCount: 0,      // tracks gs.bids.length to detect new bids
 };
 
 // Timer for auto-dismiss round-over overlay
@@ -200,6 +204,16 @@ function handleRoomUpdate(msg) {
 function handleGameState(msg) {
   // Reset selection on every state update — server state is the truth
   S.selectedKeys.clear();
+
+  // Bidding pass-state tracking:
+  // - A new deal resets the pass flag (new bidding round begins).
+  // - A new bid by ANY player resets the pass flag because the server clears
+  //   passed_in_bidding on every bid, so all players must pass again.
+  const newBidsCount = (msg.bids || []).length;
+  if (msg.phase === "dealing" || newBidsCount > S.lastBidsCount) {
+    S.hasPassed = false;
+  }
+  S.lastBidsCount = newBidsCount;
 
   S.gameState = msg;
 
@@ -761,8 +775,21 @@ function renderBidArea(area, gs) {
   ctrlRow.className = "action-row";
   if (gs.phase === "bidding_after_deal") {
     const passBtn = document.createElement("button");
-    passBtn.textContent = "Pass";
-    passBtn.addEventListener("click", () => sendWS({ action: "pass_bid" }));
+    // Once a player has placed a bid they cannot take it back by passing.
+    const iHaveBid = (gs.bids || []).some(b => b.player_id === S.playerId);
+    passBtn.textContent = S.hasPassed ? "Passed ✓" : "Pass";
+    passBtn.disabled = iHaveBid || S.hasPassed;
+    if (S.hasPassed) passBtn.classList.add("btn-passed");
+    if (!passBtn.disabled) {
+      passBtn.addEventListener("click", () => {
+        S.hasPassed = true;
+        sendWS({ action: "pass_bid" });
+        // Update button immediately; full re-render arrives with next game_state
+        passBtn.textContent = "Passed ✓";
+        passBtn.disabled = true;
+        passBtn.classList.add("btn-passed");
+      });
+    }
     ctrlRow.appendChild(passBtn);
   }
   if (S.isGameMaster) {

@@ -57,6 +57,31 @@ pressing, and a live "X/4 ready" counter updates for everyone.
 
 ---
 
+### Feature 3 — Verified compatibility with both Find Friends and Upgrade modes
+
+All changes made in Session 14 (and Session 13) were audited for game-mode
+compatibility. No mode-specific conditional branching is present or needed.
+
+**Audit results:**
+- **Live attacking_points** (`engine.py`): uses `p.is_defending` flag, which is
+  set correctly by both `FindFriendsStrategy` (on friend reveal + first trick)
+  and `UpgradeStrategy` (at game start). Handles mid-round friend reveals
+  correctly because the set is recomputed from scratch on every trick.
+- **`round_players` snapshot** (`end_round()`): captured after rank advancement
+  but before team swap — correct in both modes. Both strategies advance
+  `round_leader_id` using `get_next_leader()` which already uses `is_defending`.
+- **Bottom-deck reveal** (`handler.py`): triggered by `winner == "defending"`,
+  which is computed from the universal `compute_rank_advancement()` call —
+  identical logic for both modes.
+- **`start_and_deal`** (`handler.py`): constructs the strategy via `_make_strategy(mode)`
+  and passes it to `GameEngine`. No branching after that — fully mode-agnostic.
+- **`ready_for_next_round`** and **rank sticky-note**: entirely in the network
+  layer and frontend respectively; no engine calls, fully universal.
+
+No code changes required — the implementation was already correct for both modes.
+
+---
+
 ## Session 13 — Bug Fixes: Scoring Thresholds, Live Points, Round-Over Screen
 
 **Status:** Complete. 516 tests passing.

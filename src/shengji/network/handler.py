@@ -197,12 +197,21 @@ async def handle_round_end(
         await broadcast_all(room, {"type": "error", "message": str(exc)})
         return
 
+    # bottom_deck is not modified by end_round — still holds the buried cards.
+    # Only reveal it to everyone when defenders win (attackers didn't meet threshold).
+    winner = result["winner"]
+    reveal_bottom = winner == "defending"
     await broadcast_all(room, {
         "type": "round_over",
         "attacking_points": result["attacking_points"],
-        "winner": result["winner"],
+        "winner": winner,
         "steps": result["steps"],
         "game_over": result["game_over"],
+        "players": result.get("round_players", []),   # team/rank snapshot this round
+        "bottom_deck": (
+            [c.to_json() for c in room.game_state.bottom_deck]
+            if reveal_bottom else None
+        ),
     })
     await broadcast_game_states(room)
 

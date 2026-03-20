@@ -4,6 +4,74 @@ Newest entries at the top.
 
 ---
 
+## Session 13 — Bug Fixes: Scoring Thresholds, Live Points, Round-Over Screen
+
+**Status:** Complete. 516 tests passing.
+
+**Branch:** `fix/endgame-points-leader-rotation`
+
+### Fix 1 — Scoring thresholds wrong: 80-pt threshold, not 400-pt (backend)
+
+The `compute_rank_advancement` function used `base = 100 * n_decks = 200` for
+the threshold boundaries. This meant attackers needed 400+ points to take over
+as defenders — never achievable without a large bottom-deck multiplier.
+
+The correct Shengji rule for a 2-deck game uses `step = 20 * n_decks = 40`,
+giving thresholds at 0, 40, 80, 120, 160, 200 (attacking). The key threshold
+for attackers to win (take over at same rank) is **80 points**.
+
+- Changed `base = 100 * n_decks` → `step = 20 * n_decks` in `scoring.py`
+- New thresholds for n=2: 0→def+3, 1-39→def+2, 40-79→def+1, 80-119→atk+0,
+  120-159→atk+1, 160-199→atk+2, 200+→atk+3
+- All 15 `TestComputeRankAdvancement` tests updated to match new thresholds
+- Added `test_user_example_95pts_attacking_zero` — the user's concrete example
+
+### Fix 2 — game_over detection triggered incorrectly for "attacking 0" (backend)
+
+The old check `if winner != "attacking" or steps == 0` triggered game_over
+when attackers take over at the same rank (attacking, steps=0). This is wrong:
+when attackers take over, the defenders *lost* the round — game should not end.
+
+- Changed to `if winner == "defending"` — game only ends when defenders actually
+  win a round AND one of them is already at ACE rank.
+
+### Fix 3 — attacking_points not tracked live during game (backend)
+
+`state.attacking_points` was only set in `end_round()`, so the frontend showed
+0 throughout all 25 tricks. Added live update after each trick resolution in
+`play_cards()`: sums attacker trick points without the bottom-deck multiplier
+(which is only applied at round end).
+
+### Fix 4 — Round-over screen too sparse; needs team/bottom-deck info (backend + frontend)
+
+**Backend (`handler.py`):** `round_over` message now includes:
+- `players`: snapshot of all players with their team assignment and rank
+- `bottom_deck`: the 8 buried cards, revealed only when defenders win
+
+**Backend (`engine.py`):** `end_round()` now returns `round_players` in its
+result dict (captured post-rank-advance, pre-team-swap).
+
+**Frontend (`app.js`):** `handleRoundOver` now renders a rich HTML overlay:
+- Attacking points + whether ≥ 80 threshold was crossed
+- Outcome (rank advancement or take-over)
+- Two-column team breakdown with player name and rank
+- Bottom-deck card display (defenders-win only)
+
+`handleGameOver` updated to show a more descriptive message.
+
+### Fix 5 — Points display shows confusing "200 pts needed" (frontend)
+
+Replaced the "Defending: X pts needed" metric with a threshold-relative display:
+- Shows "need X more (of 80)" when below threshold
+- Shows "+X over 80 ✓" (green) when attackers have exceeded the threshold
+
+### Fix 6 — Overlay body changed from `<p>` to `<div>` for rich HTML content
+
+Overlay box widened to 520px (was 400px). Round-over auto-dismiss extended
+from 4 s to 8 s to give players time to read the team/rank breakdown.
+
+---
+
 ## Session 12 — Bug Fixes: Joker Highlighting, Throw Validation, Deal Delay
 
 **Status:** Complete. 515 tests passing.

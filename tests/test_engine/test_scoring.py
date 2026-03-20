@@ -34,7 +34,11 @@ THREE_S = _c(Suit.SPADES, Rank.THREE)  # 0 pts
 # ---------------------------------------------------------------------------
 
 class TestComputeRankAdvancement:
-    """Test every boundary of the threshold table (n=2 by default, base=200)."""
+    """Test every boundary of the threshold table.
+
+    For n=2: step=40, thresholds at 0,40,80,120,160,200.
+    The key threshold for attackers to take over is 80 (= 2*step = 2*40).
+    """
 
     def test_zero_pts_defending_plus3(self):
         assert compute_rank_advancement(0) == ("defending", 3)
@@ -43,52 +47,61 @@ class TestComputeRankAdvancement:
         assert compute_rank_advancement(1) == ("defending", 2)
 
     def test_just_below_first_threshold_defending_plus2(self):
-        assert compute_rank_advancement(199) == ("defending", 2)
+        # step-1 = 39
+        assert compute_rank_advancement(39) == ("defending", 2)
 
     def test_at_first_threshold_defending_plus1(self):
-        # 100n = 200
-        assert compute_rank_advancement(200) == ("defending", 1)
+        # step = 40
+        assert compute_rank_advancement(40) == ("defending", 1)
 
     def test_just_below_second_threshold_defending_plus1(self):
-        assert compute_rank_advancement(399) == ("defending", 1)
+        # 2*step-1 = 79
+        assert compute_rank_advancement(79) == ("defending", 1)
 
     def test_at_second_threshold_attacking_zero(self):
-        # 200n = 400
-        assert compute_rank_advancement(400) == ("attacking", 0)
+        # 2*step = 80 — attackers take over same rank (the key "win" threshold)
+        assert compute_rank_advancement(80) == ("attacking", 0)
+
+    def test_user_example_95pts_attacking_zero(self):
+        # User example: 95 pts → "attackers succeeded but do not skip a level"
+        assert compute_rank_advancement(95) == ("attacking", 0)
 
     def test_just_below_third_threshold_attacking_zero(self):
-        assert compute_rank_advancement(599) == ("attacking", 0)
+        # 3*step-1 = 119
+        assert compute_rank_advancement(119) == ("attacking", 0)
 
     def test_at_third_threshold_attacking_plus1(self):
-        # 300n = 600
-        assert compute_rank_advancement(600) == ("attacking", 1)
+        # 3*step = 120
+        assert compute_rank_advancement(120) == ("attacking", 1)
 
     def test_just_below_fourth_threshold_attacking_plus1(self):
-        assert compute_rank_advancement(799) == ("attacking", 1)
+        # 4*step-1 = 159
+        assert compute_rank_advancement(159) == ("attacking", 1)
 
     def test_at_fourth_threshold_attacking_plus2(self):
-        # 400n = 800
-        assert compute_rank_advancement(800) == ("attacking", 2)
+        # 4*step = 160
+        assert compute_rank_advancement(160) == ("attacking", 2)
 
     def test_just_below_fifth_threshold_attacking_plus2(self):
-        assert compute_rank_advancement(999) == ("attacking", 2)
+        # 5*step-1 = 199
+        assert compute_rank_advancement(199) == ("attacking", 2)
 
     def test_at_fifth_threshold_attacking_plus3(self):
-        # 500n = 1000
-        assert compute_rank_advancement(1000) == ("attacking", 3)
+        # 5*step = 200 (achievable via bottom-deck multiplier)
+        assert compute_rank_advancement(200) == ("attacking", 3)
 
     def test_large_value_attacking_plus3(self):
         assert compute_rank_advancement(9999) == ("attacking", 3)
 
     def test_n_equals_1_thresholds(self):
-        # n=1: base=100, thresholds at 100, 200, 300, 400, 500
+        # n=1: step=20, thresholds at 0,20,40,60,80,100
         assert compute_rank_advancement(0, n_decks=1) == ("defending", 3)
-        assert compute_rank_advancement(50, n_decks=1) == ("defending", 2)
-        assert compute_rank_advancement(100, n_decks=1) == ("defending", 1)
-        assert compute_rank_advancement(200, n_decks=1) == ("attacking", 0)
-        assert compute_rank_advancement(300, n_decks=1) == ("attacking", 1)
-        assert compute_rank_advancement(400, n_decks=1) == ("attacking", 2)
-        assert compute_rank_advancement(500, n_decks=1) == ("attacking", 3)
+        assert compute_rank_advancement(10, n_decks=1) == ("defending", 2)
+        assert compute_rank_advancement(20, n_decks=1) == ("defending", 1)
+        assert compute_rank_advancement(40, n_decks=1) == ("attacking", 0)
+        assert compute_rank_advancement(60, n_decks=1) == ("attacking", 1)
+        assert compute_rank_advancement(80, n_decks=1) == ("attacking", 2)
+        assert compute_rank_advancement(100, n_decks=1) == ("attacking", 3)
 
 
 # ---------------------------------------------------------------------------
@@ -281,14 +294,16 @@ class TestEndRound:
         assert engine._player("p2").rank == Rank.FIVE
 
     def test_attacker_rank_advances_on_win(self):
-        engine = _make_engine(_make_state_in_scoring(600))  # attacking +1
+        # 120 pts: 3*step=120 → attacking +1 (step=40 for n=2)
+        engine = _make_engine(_make_state_in_scoring(120))
         engine.end_round()
-        # Attackers are p1 and p3
+        # Attackers are p1 and p3; advance 1 rank from TWO → THREE
         assert engine._player("p1").rank == Rank.THREE
         assert engine._player("p3").rank == Rank.THREE
 
     def test_no_advancement_zero_steps(self):
-        engine = _make_engine(_make_state_in_scoring(400))  # attacking +0
+        # 90 pts: 2*step=80 ≤ 90 < 3*step=120 → attacking +0 (take over same rank)
+        engine = _make_engine(_make_state_in_scoring(90))
         result = engine.end_round()
         assert result["steps"] == 0
         # Attackers take over but don't advance ranks

@@ -244,25 +244,96 @@ function handleGameState(msg) {
 }
 
 function handleRoundOver(msg) {
+  const pts      = msg.attacking_points || 0;
   const isDefWin = msg.winner === "defending";
-  const winner   = isDefWin ? "Defenders" : "Attackers";
-  const pts      = msg.attacking_points;
   const steps    = msg.steps;
-  let outcome;
-  if (steps === 0) {
-    outcome = "Attackers take over as Defenders — no rank change.";
+  const players  = msg.players || [];
+  const bottomDeck = msg.bottom_deck || null;
+
+  // Build HTML content for the overlay body
+  const div = document.createElement("div");
+
+  // Points line
+  const overThreshold = pts >= ATK_THRESHOLD;
+  const ptsLine = document.createElement("div");
+  ptsLine.className = "pts-line";
+  ptsLine.textContent = `Attacking scored ${pts} pts${overThreshold ? " ✓ (≥ 80)" : " ✗ (< 80)"}`;
+  div.appendChild(ptsLine);
+
+  // Outcome line
+  const outLine = document.createElement("div");
+  outLine.className = "outcome-line";
+  if (isDefWin) {
+    outLine.textContent = steps > 0
+      ? `Defenders win — advance ${steps} rank${steps !== 1 ? "s" : ""}.`
+      : "Defenders win — already at max rank.";
+  } else if (steps === 0) {
+    outLine.textContent = "Attackers take over as Defenders — same rank.";
   } else {
-    outcome = `${winner} advance ${steps} rank${steps !== 1 ? "s" : ""}.`;
+    outLine.textContent = `Attackers win — advance ${steps} rank${steps !== 1 ? "s" : ""}.`;
   }
-  const body = `Attacking team scored ${pts} pts. ${outcome}`;
-  showRoundOverlay("Round Over", body);
+  div.appendChild(outLine);
+
+  // Team breakdown
+  if (players.length) {
+    const teamsRow = document.createElement("div");
+    teamsRow.className = "teams-row";
+
+    for (const teamKey of ["defending", "attacking"]) {
+      const block = document.createElement("div");
+      block.className = `team-block ${teamKey}`;
+
+      const label = document.createElement("div");
+      label.className = "team-label";
+      label.textContent = teamKey === "defending" ? "Defenders" : "Attackers";
+      block.appendChild(label);
+
+      const teamPlayers = players.filter(p => p.is_defending === (teamKey === "defending"));
+      for (const p of teamPlayers) {
+        const line = document.createElement("div");
+        line.className = "player-rank-line";
+        line.textContent = `${p.name} — ${rankDisplay(p.rank)}`;
+        block.appendChild(line);
+      }
+      teamsRow.appendChild(block);
+    }
+    div.appendChild(teamsRow);
+  }
+
+  // Bottom deck reveal (only when defenders win)
+  if (isDefWin && bottomDeck && bottomDeck.length) {
+    const botSection = document.createElement("div");
+    botSection.className = "bottom-section";
+
+    const botLabel = document.createElement("div");
+    botLabel.className = "bottom-label";
+    botLabel.textContent = "Attackers' buried cards:";
+    botSection.appendChild(botLabel);
+
+    const botCards = document.createElement("div");
+    botCards.className = "bottom-cards";
+    for (const card of bottomDeck) {
+      botCards.appendChild(makeCardEl(card, false));
+    }
+    botSection.appendChild(botCards);
+    div.appendChild(botSection);
+  }
+
+  showRoundOverlay("Round Over", div);
 }
 
 function handleGameOver(msg) {
   clearTimeout(_roundOverlayTimer);
   _roundOverlayTimer = null;
-  const winner = msg.winner === "defending" ? "Defenders" : "Attackers";
-  showFinalOverlay("Game Over!", `${winner} win the game!`);
+  const isDefWin = msg.winner === "defending";
+  const div = document.createElement("div");
+  const line = document.createElement("div");
+  line.className = "outcome-line";
+  line.textContent = isDefWin
+    ? "Defenders successfully defended from Ace — they win the game!"
+    : "Attackers win the game!";
+  div.appendChild(line);
+  showFinalOverlay("Game Over!", div);
 }
 
 function handleGameAborted(msg) {
@@ -296,23 +367,34 @@ function handleError(msg) {
 
 // ── Overlays ──────────────────────────────────────────────────────────────
 
-// Round-over: auto-dismisses after 4s or when next DEALING state arrives.
+// Set the overlay body — accepts a string or a DOM Node.
+function _setOverlayBody(body) {
+  const el = document.getElementById("overlay-body");
+  el.innerHTML = "";
+  if (typeof body === "string") {
+    el.textContent = body;
+  } else {
+    el.appendChild(body);
+  }
+}
+
+// Round-over: auto-dismisses after 8s or when next DEALING state arrives.
 function showRoundOverlay(title, body) {
   document.getElementById("overlay-title").textContent = title;
-  document.getElementById("overlay-body").textContent  = body;
+  _setOverlayBody(body);
   document.getElementById("overlay-btn").classList.add("hidden");
   document.getElementById("overlay").classList.remove("hidden");
   clearTimeout(_roundOverlayTimer);
   _roundOverlayTimer = setTimeout(() => {
     _roundOverlayTimer = null;
     hideOverlay();
-  }, 4000);
+  }, 8000);
 }
 
 // Final overlay (game over / disconnected): requires user to click OK.
 function showFinalOverlay(title, body) {
   document.getElementById("overlay-title").textContent = title;
-  document.getElementById("overlay-body").textContent  = body;
+  _setOverlayBody(body);
   document.getElementById("overlay-btn").classList.remove("hidden");
   document.getElementById("overlay").classList.remove("hidden");
 }
@@ -491,14 +573,22 @@ function renderTrickArea(gs) {
 
 // ── Points display ────────────────────────────────────────────────────────
 
+// With 2 decks (200 total pts), the threshold for attackers to take over is 80 pts.
+const ATK_THRESHOLD = 80;
+
 function renderPoints(gs) {
   const atk = gs.attacking_points || 0;
   document.getElementById("pts-attacking").textContent = atk;
-  // Attacking team needs ≥ 200 pts (1 deck × 100 pts × 2 decks) to take over.
-  // Show how far they are from the key threshold.
-  const toScore = Math.max(0, 200 - atk);
-  document.getElementById("pts-defending").textContent =
-    atk >= 200 ? "200+ (scoring!)" : `${toScore} to 200`;
+  const statusEl = document.getElementById("pts-threshold-status");
+  if (atk >= ATK_THRESHOLD) {
+    const over = atk - ATK_THRESHOLD;
+    statusEl.textContent = `+${over} over 80 ✓`;
+    statusEl.style.color = "#66ff88";
+  } else {
+    const need = ATK_THRESHOLD - atk;
+    statusEl.textContent = `need ${need} more (of 80)`;
+    statusEl.style.color = "#aaa";
+  }
 }
 
 // ── Hand rendering helpers ────────────────────────────────────────────────

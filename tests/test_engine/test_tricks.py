@@ -220,6 +220,69 @@ class TestResolveTrickWinnerMulti:
 
 
 # ---------------------------------------------------------------------------
+# resolve_trick_winner — degraded follow cannot win (pair lead rule)
+# ---------------------------------------------------------------------------
+
+class TestResolveTrickWinnerDegraded:
+    """Degraded responses (no matching format) must not win the trick.
+
+    Key rule: if a follower has no pair in the led suit they must play two
+    singles (a degraded response).  That degraded play CANNOT win the trick
+    even if the individual cards outrank the leader's pair.  The only play
+    that can beat a non-trump pair lead is a matching trump pair (or tractor).
+    """
+    ctx = _ctx()  # trump_rank=2, trump_suit=HEARTS; spades/diamonds are off-suit
+
+    def test_degraded_singles_cannot_beat_pair_leader(self):
+        """Follower plays two high singles (no pair available) — leader wins."""
+        trick = [
+            ("p0", [Q_S, Q_S]),   # leader: pair of queens
+            ("p1", [A_S, K_S]),   # follower: two singles (A higher than Q, but degraded)
+        ]
+        # p1 played two singles to follow a pair lead — degraded, cannot win
+        assert resolve_trick_winner(trick, "spades", self.ctx) == "p0"
+
+    def test_trump_pair_beats_non_trump_pair_lead(self):
+        """Follower plays trump pair — eligible and wins."""
+        trick = [
+            ("p0", [A_S, A_S]),   # leader: non-trump pair
+            ("p1", [K_H, K_H]),   # follower: trump pair (hearts are trump)
+        ]
+        assert resolve_trick_winner(trick, "spades", self.ctx) == "p1"
+
+    def test_degraded_trump_singles_cannot_beat_pair_leader(self):
+        """Follower runs out of spades, plays two different trump cards — still degraded."""
+        trick = [
+            ("p0", [A_S, A_S]),   # leader: non-trump pair
+            ("p1", [A_H, K_H]),   # follower: two trump singles (different ranks, degraded)
+        ]
+        # Two different trump cards = Throw([Single, Single]), not a pair → ineligible
+        assert resolve_trick_winner(trick, "spades", self.ctx) == "p0"
+
+    def test_four_player_trick_degraded_follower_does_not_steal_win(self):
+        """In a 4-player trick, a degraded follower in the middle does not win."""
+        trick = [
+            ("p0", [Q_S, Q_S]),   # leader: pair queens
+            ("p1", [A_S, K_S]),   # degraded (no spade pair)
+            ("p2", [J_S, J_S]),   # valid spade pair, but weaker than leader
+            ("p3", [T_S, N_S]),   # degraded
+        ]
+        # p0 led the strongest eligible pair; p1 and p3 are degraded; p2 has a
+        # weaker pair.  Leader should win.
+        assert resolve_trick_winner(trick, "spades", self.ctx) == "p0"
+
+    def test_four_player_trick_trump_pair_wins_over_degraded(self):
+        """Trump pair beats non-trump pair lead even with high degraded plays in between."""
+        trick = [
+            ("p0", [Q_S, Q_S]),   # leader: non-trump pair
+            ("p1", [A_S, K_S]),   # degraded (high cards but singles)
+            ("p2", [K_H, K_H]),   # trump pair — eligible and strong
+            ("p3", [A_S, J_S]),   # degraded
+        ]
+        assert resolve_trick_winner(trick, "spades", self.ctx) == "p2"
+
+
+# ---------------------------------------------------------------------------
 # validate_throw
 # ---------------------------------------------------------------------------
 
@@ -260,6 +323,47 @@ class TestValidateThrow:
         throw_cards = [K_S, A_D]
         all_hands = {
             "p0": throw_cards + [A_S],
+            "p1": [],
+            "p2": [],
+            "p3": [],
+        }
+        assert self._throw(throw_cards, all_hands)
+
+    def test_throw_akk_valid_when_thrower_holds_the_ace(self):
+        """A♦ + K♦K♦ throw: thrower holds the only A♦ so no opponent has A♦A♦
+        to beat the pair, and no single card outranks A♦ — throw is valid."""
+        A_D2 = _c(Suit.DIAMONDS, Rank.ACE)   # same card, different object
+        K_D2 = _c(Suit.DIAMONDS, Rank.KING)
+        throw_cards = [A_D2, K_D2, K_D2]
+        all_hands = {
+            "p0": throw_cards,
+            "p1": [A_D],  # opponent has ONE A♦ — not a pair, so can't beat K♦K♦
+            "p2": [],
+            "p3": [],
+        }
+        assert self._throw(throw_cards, all_hands)
+
+    def test_throw_akk_invalid_when_opponent_has_pair_beating_the_pair(self):
+        """A♦ + K♦K♦ throw is invalid if an opponent holds A♦A♦ (pair beats pair)."""
+        A_D2 = _c(Suit.DIAMONDS, Rank.ACE)
+        K_D2 = _c(Suit.DIAMONDS, Rank.KING)
+        throw_cards = [A_D2, K_D2, K_D2]
+        all_hands = {
+            "p0": throw_cards,
+            "p1": [A_D, A_D],  # opponent has A♦A♦ — beats K♦K♦ pair
+            "p2": [],
+            "p3": [],
+        }
+        assert not self._throw(throw_cards, all_hands)
+
+    def test_throw_aak_valid_pair_aces_unbeatable(self):
+        """A♦A♦ + K♦ throw: pair of aces is unbeatable; single K♦ is safe because
+        thrower holds both aces and no opponent can have A♦."""
+        A_D2 = _c(Suit.DIAMONDS, Rank.ACE)
+        K_D2 = _c(Suit.DIAMONDS, Rank.KING)
+        throw_cards = [A_D2, A_D2, K_D2]
+        all_hands = {
+            "p0": throw_cards,   # both A♦s are with the thrower
             "p1": [],
             "p2": [],
             "p3": [],

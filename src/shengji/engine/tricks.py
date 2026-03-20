@@ -313,10 +313,21 @@ def validate_throw(
 ) -> bool:
     """Return True if the throw is valid.
 
-    A throw is valid iff every component of the throw is the highest
-    remaining card of its suit among the other players' hands.  If any
-    other player holds a non-trump card of the same suit that beats a
-    throw component, the throw is invalid.
+    A throw is valid iff, for every component of the throw, no single
+    opponent can beat that component using cards of the same suit in a
+    matching format:
+
+    - Single component:            no opponent has a higher single in the
+                                   same suit.
+    - IdenticalGroup(k) component: no single opponent has k or more cards
+                                   at the same position with higher rank.
+    - Tractor component:           no single opponent has a tractor of the
+                                   required size with higher rank.
+
+    Key rule for pairs: the thrower holding A♦ alongside K♦K♦ guarantees
+    no opponent can have two Aces (only one remains), so K♦K♦ cannot be
+    beaten by a pair — making the throw valid even though opponents might
+    hold one A♦.
 
     Parameters
     ----------
@@ -331,104 +342,205 @@ def validate_throw(
     """
     throw_fmt = classify_play(throw_cards, ctx)
     if not isinstance(throw_fmt, Throw):
-        # Not actually a throw — single/pair/tractor leads are always legal
         return True
 
-    # Build opponent hands
-    opponent_cards: list[Card] = []
-    for pid, hand in all_hands.items():
-        if pid != thrower_id:
-            opponent_cards.extend(hand)
+    # Assign each component its actual cards from the throw (format-aware).
+    assigned = _assign_throw_components(throw_cards, throw_fmt.components, ctx)
 
-    # Check each component of the throw
-    for component in throw_fmt.components:
-        component_cards = _extract_component_cards(throw_cards, component, ctx)
-        if not component_cards:
+    # For each component, check if any SINGLE opponent can beat it.
+    for component, comp_cards in assigned:
+        if not comp_cards:
             continue
-        component_suit = ctx.effective_suit(component_cards[0])
-        component_strength = ctx.card_order(component_cards[0])
+        comp_suit = ctx.effective_suit(comp_cards[0])
+        comp_strength = max(ctx.card_order(c) for c in comp_cards)
 
-        # Find opponent cards of the same suit
-        opp_suited = [
-            c for c in opponent_cards
-            if ctx.effective_suit(c) == component_suit
-        ]
-
-        for opp_card in opp_suited:
-            if ctx.card_order(opp_card) > component_strength:
-                # An opponent can beat this component with a non-trump suited card
+        for pid, hand in all_hands.items():
+            if pid == thrower_id:
+                continue
+            opp_suited = [c for c in hand if ctx.effective_suit(c) == comp_suit]
+            if _single_opp_beats_component(component, comp_strength, opp_suited, ctx):
                 return False
 
     return True
 
 
-def _extract_component_cards(
-    all_throw_cards: list[Card],
-    component: TrickFormat,
+def _assign_throw_components(
+    throw_cards: list[Card],
+    components: list[TrickFormat],
     ctx: TrumpContext,
-) -> list[Card]:
-    """Extract the cards belonging to one component of a throw.
+) -> list[tuple[TrickFormat, list[Card]]]:
+    """Map each throw component to its actual cards.
 
-    Returns up to _format_card_count(component) cards from *all_throw_cards*
-    that match the component's tier, sorted weakest first.
+    Processes in format-priority order (Tractors → IdenticalGroups → Singles)
+    so that larger groups get their cards before singles claim them.
     """
-    n = _format_card_count(component)
-    # Group by card_order, sorted ascending
-    by_pos: dict[tuple, list[Card]] = defaultdict(list)
-    for c in all_throw_cards:
-        by_pos[ctx.card_order(c)].append(c)
+    remaining = list(throw_cards)
+    result: list[tuple[TrickFormat, list[Card]]] = []
 
-    sorted_pos = sorted(by_pos.keys())
-    result: list[Card] = []
-    for pos in sorted_pos:
-        result.extend(by_pos[pos])
-        if len(result) >= n:
-            break
-    return result[:n]
+    # Pass 1: Tractors
+    for comp in components:
+        if isinstance(comp, Tractor):
+            needed = comp.multiplicity * comp.length
+            tractors = find_tractors(remaining, ctx)
+            matched: list[Card] = []
+            for t in tractors:
+                if len(t) == needed:
+                    matched = t
+                    break
+            result.append((comp, matched))
+            for c in matched:
+                remaining.remove(c)
+
+    # Pass 2: IdenticalGroups — assign highest available group of sufficient size
+    for comp in components:
+        if isinstance(comp, IdenticalGroup):
+            k = comp.count
+            by_pos: dict[tuple, list[Card]] = defaultdict(list)
+            for c in remaining:
+                by_pos[ctx.card_order(c)].append(c)
+            matched = []
+            for pos in sorted(by_pos.keys(), reverse=True):  # strongest first
+                if len(by_pos[pos]) >= k:
+                    matched = by_pos[pos][:k]
+                    break
+            result.append((comp, matched))
+            for c in matched:
+                remaining.remove(c)
+
+    # Pass 3: Singles — take one card each from whatever remains
+    for comp in components:
+        if isinstance(comp, Single):
+            if remaining:
+                result.append((comp, [remaining[0]]))
+                remaining = remaining[1:]
+            else:
+                result.append((comp, []))
+
+    return result
+
+
+def _single_opp_beats_component(
+    component: TrickFormat,
+    comp_strength: tuple,
+    opp_suited: list[Card],
+    ctx: TrumpContext,
+) -> bool:
+    """Return True if a single opponent (opp_suited = their same-suit cards)
+    can beat this throw component.
+
+    - Single:         any card with higher card_order suffices.
+    - IdenticalGroup: needs k cards at the same card_order, all higher.
+    - Tractor:        needs a matching-size tractor with higher card_order.
+    """
+    if isinstance(component, Single):
+        return any(ctx.card_order(c) > comp_strength for c in opp_suited)
+
+    if isinstance(component, IdenticalGroup):
+        k = component.count
+        by_pos: dict[tuple, list[Card]] = defaultdict(list)
+        for c in opp_suited:
+            by_pos[ctx.card_order(c)].append(c)
+        return any(
+            key > comp_strength and len(v) >= k
+            for key, v in by_pos.items()
+        )
+
+    if isinstance(component, Tractor):
+        needed = component.multiplicity * component.length
+        for t in find_tractors(opp_suited, ctx):
+            if len(t) >= needed and max(ctx.card_order(c) for c in t) > comp_strength:
+                return True
+        return False
+
+    return False
 
 
 # ---------------------------------------------------------------------------
 # resolve_trick_winner
 # ---------------------------------------------------------------------------
 
+def _format_can_beat_lead(play_fmt: TrickFormat, led_fmt: TrickFormat) -> bool:
+    """Return True if a play of play_fmt is eligible to beat a lead of led_fmt.
+
+    A degraded follow (e.g., two singles played to follow a pair lead because
+    the player had no pair) cannot win the trick regardless of card strength.
+    Only a play that matches the led format — or a stronger format in trump —
+    can win.
+
+    Rules
+    -----
+    - Single lead:            any Single is eligible.
+    - IdenticalGroup(k) lead: IdenticalGroup(>=k) or any Tractor is eligible.
+    - Tractor(m, L) lead:     Tractor with multiplicity >= m and length >= L
+                              is eligible; pairs and singles are not.
+    - Throw lead:             eligibility is not restricted (complex case).
+    """
+    if isinstance(led_fmt, Single):
+        return isinstance(play_fmt, Single)
+    if isinstance(led_fmt, IdenticalGroup):
+        k = led_fmt.count
+        if isinstance(play_fmt, IdenticalGroup):
+            return play_fmt.count >= k
+        if isinstance(play_fmt, Tractor):
+            return True  # tractor contains pairs — can beat a pair lead
+        return False  # Single or Throw cannot beat a pair/triple lead
+    if isinstance(led_fmt, Tractor):
+        if isinstance(play_fmt, Tractor):
+            return (
+                play_fmt.multiplicity >= led_fmt.multiplicity
+                and play_fmt.length >= led_fmt.length
+            )
+        return False  # pairs and singles cannot beat a tractor lead
+    # Throw lead — don't restrict (existing behaviour preserved)
+    return True
+
+
 def resolve_trick_winner(
     trick: list[tuple[str, list[Card]]],
     led_suit: str,
     ctx: TrumpContext,
+    led_format: TrickFormat | None = None,
 ) -> str:
     """Return the player_id that wins the trick.
 
     Rules
     -----
-    1. Only plays that match the led suit (or trump) are eligible to win.
-       Off-suit plays that don't follow suit can never win.
-    2. Among eligible plays, trump beats non-trump.
-    3. Among plays of the same effective suit, the highest card (by
-       card_order) wins.
-    4. The strongest card is the highest card_order value in the play.
-       For multi-card plays (pairs, tractors) the winning "value" is the
-       single strongest card in that play.
-    5. On a tie (equal-value cards), the first player to play wins.
+    1. Only plays in the led suit or trump are eligible to win.
+       Off-suit plays can never win.
+    2. A follower's play must match the led format (or a stronger format in
+       the same suit / trump) to be eligible to win.  A degraded response
+       (e.g., two singles played to follow a pair lead because the player
+       had no pair) is ineligible to win even if the cards outrank the lead.
+    3. Among eligible plays, trump beats non-trump.
+    4. Among plays of the same effective suit, the highest card_order wins.
+       For multi-card plays the winning value is the single strongest card.
+    5. On a tie, the first player to play wins (leader wins ties).
 
     Parameters
     ----------
     trick:
         Ordered list of (player_id, cards_played) — index 0 is the leader.
     led_suit:
-        The effective suit of the lead (from ctx.effective_suit on the leader's cards).
+        Effective suit of the lead.
     ctx:
         Current TrumpContext.
+    led_format:
+        TrickFormat of the lead.  If omitted it is derived from the leader's
+        cards via classify_play (backward-compatible with existing tests).
     """
     if not trick:
         raise ValueError("Cannot resolve an empty trick.")
 
+    if led_format is None:
+        led_format = classify_play(trick[0][1], ctx)
+
     best_player_id = trick[0][0]
-    best_strength = _play_strength(trick[0][1], led_suit, ctx)
+    best_strength = _play_strength(trick[0][1], led_suit, led_format, ctx)
 
     for player_id, cards in trick[1:]:
-        strength = _play_strength(cards, led_suit, ctx)
+        strength = _play_strength(cards, led_suit, led_format, ctx)
         if strength is None:
-            continue  # off-suit, ineligible
+            continue  # ineligible (off-suit or degraded follow)
         if best_strength is None or strength > best_strength:
             best_player_id = player_id
             best_strength = strength
@@ -439,17 +551,22 @@ def resolve_trick_winner(
 def _play_strength(
     cards: list[Card],
     led_suit: str,
+    led_format: TrickFormat,
     ctx: TrumpContext,
 ) -> tuple[int, int] | None:
-    """Return the strength key of a play, or None if ineligible.
+    """Return the strength key of a play, or None if ineligible to win.
 
-    A play is eligible if any card in it matches the led_suit or is trump.
-    Strength is the highest card_order in the play.
+    A play is ineligible if:
+    - Its effective suit is neither the led suit nor trump, OR
+    - Its classified format cannot beat the led format (degraded response).
     """
-    play_suit = ctx.effective_suit(cards[0])  # all cards in a play share the led suit if following correctly
+    play_suit = ctx.effective_suit(cards[0])
     if play_suit != led_suit and play_suit != "trump" and led_suit != "trump":
-        # Off-suit and not trump — ineligible
+        return None  # off-suit, ineligible
+
+    # Degraded responses (e.g., two singles following a pair lead) cannot win.
+    play_fmt = classify_play(cards, ctx)
+    if not _format_can_beat_lead(play_fmt, led_format):
         return None
 
-    # Strength = highest card_order in the play
     return max(ctx.card_order(c) for c in cards)

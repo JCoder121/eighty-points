@@ -319,26 +319,6 @@ class TestDealing:
 class TestBidding:
     """Tests that assume we reach BIDDING_AFTER_DEAL first via _setup_deal."""
 
-    def test_game_master_can_close_bidding(self):
-        """GM manually closes bidding → phase advances past BIDDING_AFTER_DEAL."""
-        client, _ = _client()
-        room_id, pids = _setup_room(client, n=NUM_PLAYERS)
-        with ExitStack() as stack:
-            wss = _setup_deal(stack, client, room_id, pids)
-            wss[0].send_json({"action": "close_bidding"})
-            msg = wss[0].receive_json()
-            assert msg["type"] == "game_state"
-            assert msg["phase"] != "bidding_after_deal"
-
-    def test_non_gm_cannot_close_bidding(self):
-        client, _ = _client()
-        room_id, pids = _setup_room(client, n=NUM_PLAYERS)
-        with ExitStack() as stack:
-            wss = _setup_deal(stack, client, room_id, pids)
-            wss[1].send_json({"action": "close_bidding"})
-            msg = _next_of_type(wss[1], "error")
-            assert "game master" in msg["message"].lower()
-
     def test_all_pass_bid_auto_closes_bidding(self):
         """When all NUM_PLAYERS players pass, bidding closes automatically."""
         client, _ = _client()

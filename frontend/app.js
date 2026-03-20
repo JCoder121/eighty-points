@@ -395,9 +395,9 @@ function renderLobby() {
     statusEl.textContent = `Mode: ${modeName(mode)} — starting...`;
   }
 
-  // Mode selector (game master only)
+  // Mode selector (game master only, and only once all 4 players have joined)
   const modeDiv = document.getElementById("mode-selector");
-  if (S.isGameMaster && phase === "waiting") {
+  if (S.isGameMaster && phase === "waiting" && n === 4) {
     modeDiv.classList.remove("hidden");
     document.getElementById("btn-upgrade").classList.toggle("active", mode === "upgrade");
     document.getElementById("btn-find-friends").classList.toggle("active", mode === "find_friends");
@@ -464,6 +464,7 @@ function renderTrickArea(gs) {
     nameEl.textContent = p ? p.name : "—";
     nameEl.className   = "player-name-label";
     if (p) {
+      if (p.id === S.playerId)           nameEl.classList.add("is-self");
       if (p.id === gs.current_turn_id)   nameEl.classList.add("is-turn");
       else if (p.id === gs.current_leader_id) nameEl.classList.add("is-leader");
     }
@@ -504,6 +505,17 @@ function renderPoints(gs) {
 
 function isJoker(card) {
   return card.rank === "small_joker" || card.rank === "big_joker";
+}
+
+// Return true if card is a trump card given the resolved trump context.
+// Jokers are ALWAYS trump regardless of context.
+// Also covers trump-rank cards (any suit) and trump-suit cards (if a suit is set).
+function isTrumpCard(card, trumpContext) {
+  if (isJoker(card)) return true;
+  if (!trumpContext) return false;
+  if (trumpContext.trump_rank && card.rank === trumpContext.trump_rank) return true;
+  if (trumpContext.trump_suit && card.suit === trumpContext.trump_suit) return true;
+  return false;
 }
 
 // Return the trump rank string (e.g. "7") from the game state.
@@ -622,6 +634,11 @@ function renderHand(gs) {
 
   for (const { card, key } of sorted) {
     const el = makeCardEl(card, canSelect);
+
+    // Highlight trump cards (trump-rank, trump-suit, jokers) for accessibility.
+    if (isTrumpCard(card, gs.trump_context)) {
+      el.classList.add("trump-highlight");
+    }
 
     // Mark bottom deck cards with a subtle indicator (⊕ badge in corner)
     if (key.startsWith("bot:")) {
@@ -878,12 +895,6 @@ function renderBidArea(area, gs) {
       });
     }
     ctrlRow.appendChild(passBtn);
-  }
-  if (S.isGameMaster) {
-    const closeBtn = document.createElement("button");
-    closeBtn.textContent = "Close Bidding";
-    closeBtn.addEventListener("click", () => sendWS({ action: "close_bidding" }));
-    ctrlRow.appendChild(closeBtn);
   }
   if (ctrlRow.children.length) area.appendChild(ctrlRow);
 

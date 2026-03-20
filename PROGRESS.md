@@ -4,6 +4,105 @@ Newest entries at the top.
 
 ---
 
+## Session 12 — Bug Fixes: Joker Highlighting, Throw Validation, Deal Delay
+
+**Status:** Complete. 515 tests passing.
+
+**Branch:** `fix/bidding-close-and-bugs`
+
+### Fix 6 — Jokers always highlighted regardless of trump context (frontend)
+
+- `isTrumpCard()` checked `!trumpContext` before `isJoker()`, so jokers
+  were not highlighted when `trump_context` was null (e.g., during the
+  dealing phase before a bid is placed).  Moved the joker check first
+  so jokers are always treated as trump regardless of context.
+
+### Fix 7 — Throw validation: pair components require a pair to beat (engine)
+
+Two bugs in the old `validate_throw`:
+
+1. **Wrong card assignment:** `_extract_component_cards` extracted cards
+   in ascending card_order order, so for an A♦+K♦K♦ throw it assigned
+   K♦ as the "single" and K♦K♦ as the pair — then checked whether any
+   opponent could beat a single K♦ with any higher card, incorrectly
+   invalidating the throw when an opponent held one A♦.
+
+2. **Wrong beat check:** For IdenticalGroup components, the check compared
+   individual card strengths.  A single A♦ was treated as able to "beat"
+   a K♦K♦ pair, which violates the rule: you need a PAIR to beat a pair.
+
+**Fix:** Rewrote `validate_throw` with two new helpers:
+- `_assign_throw_components`: correctly maps throw cards to components
+  (tractors first, then IdenticalGroups by highest group, then singles)
+  so A♦+K♦K♦ is correctly seen as pair=K♦K♦, single=A♦.
+- `_single_opp_beats_component`: checks per-opponent (not pooled) and
+  format-aware: a Single is beaten by any higher card; an IdenticalGroup(k)
+  requires the opponent to have k cards at the same position with higher
+  rank; a Tractor requires a matching-size tractor.
+
+Result: A♦+K♦K♦ and A♦A♦+K♦ throws are now correctly valid when the
+thrower holds enough aces to prevent opponents from forming a beating pair.
+3 new regression tests added.
+
+### Fix 8 — Deal delay reduced from 0.5 s to 0.25 s (backend)
+
+- `DEAL_DELAY_SECONDS` in `app.py` changed from 0.5 to 0.25.  100 cards
+  now take ~25 s to deal rather than ~50 s.
+
+---
+
+## Session 11 — Bug Fixes: Bidding Design, Mode Selector, Trump Highlighting, Trick Resolution
+
+**Status:** Complete. 512 tests passing.
+
+**Branch:** `fix/bidding-close-and-bugs`
+
+### Fix 1 — Remove manual close-bidding; all players must pass (backend + frontend)
+
+- Removed `close_bidding` action branch from `handler.py`. Bidding now
+  closes exclusively when all 4 players pass (`pass_bid` auto-close).
+- Removed "Close Bidding" button from `renderBidArea` in `app.js`.
+- Removed two now-invalid tests (`test_game_master_can_close_bidding`,
+  `test_non_gm_cannot_close_bidding`) from `test_websocket.py`.
+
+### Fix 2 — Mode selector shown only after all 4 players join (frontend)
+
+- `renderLobby` now hides the Upgrade / Find Friends buttons until
+  `n === 4`, preventing the game master from starting a game with
+  fewer than 4 players.
+
+### Fix 3 — Trump card highlighting throughout all play phases (frontend)
+
+- Added `isTrumpCard(card, trumpContext)` helper: returns true for
+  jokers, trump-rank cards (any suit), and trump-suit cards.
+- Non-bidding `renderHand` now applies `.trump-highlight` (gold border
+  + warm tint) to every trump card in hand for all post-bidding phases,
+  giving players a persistent visual reminder of which cards are trump.
+
+### Fix 4 — Own name larger on trick table (frontend)
+
+- `renderTrickArea` adds `is-self` CSS class to the local player's name
+  label (14 px, bold, white vs. 11 px grey for others). Makes it easy
+  to identify your own position when testing multiple windows.
+
+### Fix 5 — Degraded follows cannot win the trick (backend engine + tests)
+
+- **Bug:** A follower with no pair in the led suit was allowed to "win"
+  a pair-lead trick by playing two high singles (e.g., A♠ + K♠ beating
+  a Q♠Q♠ lead), violating the rule that a degraded response can never win.
+- **Fix:** Added `_format_can_beat_lead(play_fmt, led_fmt)` to `tricks.py`.
+  Updated `_play_strength` to classify the follower's play and return
+  `None` (ineligible) if the play's format cannot beat the led format.
+  Updated `resolve_trick_winner` to accept an optional `led_format`
+  parameter (auto-derived from the leader's cards if omitted, keeping
+  existing tests backward-compatible). Engine passes `state._led_format`
+  explicitly to `resolve_trick_winner`.
+- **Coverage:** A trump pair (or tractor) following a non-trump pair lead
+  is still eligible to win — the format check correctly allows it.
+- 5 new regression tests added to `test_tricks.py`.
+
+---
+
 ## Session 10 — Bug Fix: Bidding UX, Rules, and Follow-Play Validation
 
 **Status:** Complete. 509 tests passing.

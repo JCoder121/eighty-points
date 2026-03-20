@@ -10,6 +10,28 @@ Newest entries at the top.
 
 **Branch:** `fix/endgame-points-leader-rotation`
 
+### Feature 2 — Rank sticky-note display (client-side toggle)
+
+A "Ranks" button in the game top-bar (right side) toggles a small floating
+sticky-note panel showing every player's current rank and team role. This is
+entirely client-side — only the player who clicked the button sees it.
+
+**Frontend-only changes:**
+- `index.html`: Added `#btn-rank-display` button to the game top bar; added
+  `#rank-display` sticky panel with `#rank-display-content` (initially hidden).
+  Added CSS for the panel, rank entries, team-role tags (Def/Atk), and active
+  button state.
+- `app.js`:
+  - `S.showRankDisplay: false` added to app state.
+  - `renderRankDisplay(gs)`: renders one row per player with name, rank, and
+    team tag (Def/Atk) when teams are known. Self is highlighted gold.
+  - Called from `renderGame(gs)` so the panel refreshes on every state update.
+  - Toggle button click handler: flips `S.showRankDisplay`, sets `.active` CSS,
+    and re-renders the panel immediately.
+  - Reset to hidden when OK returns player to landing.
+
+---
+
 ### Feature 1 — Ready-for-next-round button (replaces auto-proceed)
 
 **Problem:** The round-over overlay auto-dismissed after 8 s, often before

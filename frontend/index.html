@@ -498,6 +498,57 @@
     #overlay-box button { font-size: 15px; padding: 10px 24px; }
 
     /* ------------------------------------------------------------------ */
+    /* Rank sticky-note                                                     */
+    /* ------------------------------------------------------------------ */
+    #rank-display {
+      position: fixed;
+      top: 52px;
+      right: 12px;
+      background: #111130;
+      border: 1px solid #555;
+      border-radius: 8px;
+      padding: 10px 14px;
+      z-index: 50;
+      min-width: 150px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    }
+    #rank-display h4 {
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+    .rank-entry {
+      font-size: 13px;
+      color: #ccc;
+      padding: 2px 0;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .rank-entry.is-self { color: #ffcc44; font-weight: bold; }
+    .rank-entry .rank-val { color: #aaaaff; font-weight: bold; }
+    .rank-entry .team-tag {
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 8px;
+      align-self: center;
+    }
+    .rank-entry .team-tag.def { background: #225522; color: #88ff88; }
+    .rank-entry .team-tag.atk { background: #552222; color: #ff8888; }
+
+    #btn-rank-display {
+      font-size: 12px;
+      padding: 4px 10px;
+      background: transparent;
+      border-color: #444;
+      color: #aaa;
+    }
+    #btn-rank-display:hover:not(:disabled) { background: #1a1a3a; border-color: #888; color: #fff; }
+    #btn-rank-display.active { border-color: #aaaaff; color: #aaaaff; background: #1a1a3a; }
+
+    /* ------------------------------------------------------------------ */
     /* Miscellaneous                                                        */
     /* ------------------------------------------------------------------ */
     .dealer-tag {
@@ -592,6 +643,13 @@
   <div class="top-bar">
     <span class="room-code" id="game-room-code" title="Click to copy">ROOM CODE: ------</span>
     <span class="trump-info" id="game-trump-info">—</span>
+    <button id="btn-rank-display" title="Toggle player rank display">Ranks</button>
+  </div>
+
+  <!-- Rank sticky-note (client-only, toggled per player) -->
+  <div id="rank-display" class="hidden">
+    <h4>Current Ranks</h4>
+    <div id="rank-display-content"></div>
   </div>
 
   <div class="game-body">

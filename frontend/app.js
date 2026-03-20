@@ -56,6 +56,9 @@ const S = {
   // Bidding state — reset when a new bid is placed or a new deal starts.
   hasPassed:     false,  // true once this player has pressed Pass this round
   lastBidsCount: 0,      // tracks gs.bids.length to detect new bids
+
+  // Rank display sticky-note (client-only toggle).
+  showRankDisplay: false,
 };
 
 // Timer for auto-dismiss round-over overlay
@@ -533,6 +536,52 @@ function renderGame(gs) {
   renderPoints(gs);
   renderHand(gs);
   renderActionArea(gs);
+  renderRankDisplay(gs);
+}
+
+// ── Rank sticky-note ──────────────────────────────────────────────────────
+
+function renderRankDisplay(gs) {
+  const panel = document.getElementById("rank-display");
+  if (!S.showRankDisplay) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+
+  const content = document.getElementById("rank-display-content");
+  content.innerHTML = "";
+
+  const teamsKnown = gs.players && gs.players.some(p => p.team !== undefined && p.team !== null);
+
+  for (const p of (gs.players || [])) {
+    const row = document.createElement("div");
+    row.className = "rank-entry" + (p.id === S.playerId ? " is-self" : "");
+
+    const nameSpan = document.createElement("span");
+    nameSpan.textContent = p.name;
+    row.appendChild(nameSpan);
+
+    const right = document.createElement("span");
+    right.style.display = "flex";
+    right.style.gap = "6px";
+    right.style.alignItems = "center";
+
+    const rankSpan = document.createElement("span");
+    rankSpan.className = "rank-val";
+    rankSpan.textContent = rankDisplay(p.rank || "2");
+    right.appendChild(rankSpan);
+
+    if (teamsKnown && p.team) {
+      const tag = document.createElement("span");
+      tag.className = "team-tag " + (p.is_defending ? "def" : "atk");
+      tag.textContent = p.is_defending ? "Def" : "Atk";
+      right.appendChild(tag);
+    }
+
+    row.appendChild(right);
+    content.appendChild(row);
+  }
 }
 
 function renderRoundInfo(gs) {
@@ -1232,6 +1281,14 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Rank display toggle
+  document.getElementById("btn-rank-display").addEventListener("click", () => {
+    S.showRankDisplay = !S.showRankDisplay;
+    const btn = document.getElementById("btn-rank-display");
+    btn.classList.toggle("active", S.showRankDisplay);
+    if (S.gameState) renderRankDisplay(S.gameState);
+  });
+
   // Mode selector
   document.getElementById("btn-upgrade").addEventListener("click", () => {
     sendWS({ action: "select_mode", mode: "upgrade" });
@@ -1258,9 +1315,11 @@ document.addEventListener("DOMContentLoaded", () => {
     Object.assign(S, {
       roomId: null, playerId: null, playerName: null,
       isGameMaster: false, roomUpdate: null, gameState: null,
-      awaitingValidation: false,
+      awaitingValidation: false, showRankDisplay: false,
     });
     S.selectedKeys.clear();
+    document.getElementById("btn-rank-display").classList.remove("active");
+    document.getElementById("rank-display").classList.add("hidden");
     showScreen("screen-landing");
   });
 

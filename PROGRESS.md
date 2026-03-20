@@ -6,7 +6,7 @@ Newest entries at the top.
 
 ## Session 14 — Features: Ready Button, Rank Sticky-Note, FF Compatibility
 
-**Status:** In progress. 516 tests passing.
+**Status:** Complete. 516 tests passing.
 
 **Branch:** `fix/endgame-points-leader-rotation`
 

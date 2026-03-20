@@ -4,6 +4,37 @@ Newest entries at the top.
 
 ---
 
+## Session 14 — Features: Ready Button, Rank Sticky-Note, FF Compatibility
+
+**Status:** In progress. 516 tests passing.
+
+**Branch:** `fix/endgame-points-leader-rotation`
+
+### Feature 1 — Ready-for-next-round button (replaces auto-proceed)
+
+**Problem:** The round-over overlay auto-dismissed after 8 s, often before
+players had a chance to read the team breakdown or buried cards.
+
+**Solution:** All 4 players must press "Ready for Next Round" (styled like the
+Pass button) before the next deal starts. The button shows "Ready ✓" after
+pressing, and a live "X/4 ready" counter updates for everyone.
+
+**Backend changes:**
+- `room.py`: Added `ready_for_next_round: set[str]` field to `Room`.
+- `handler.py`:
+  - `start_and_deal` now clears `ready_for_next_round` at the start of each round.
+  - `handle_round_end` no longer calls `start_and_deal` automatically for non-game-over rounds.
+  - New `ready_for_next_round` action: adds the player to the set, broadcasts `{"type": "ready_update", "ready_count": N, "total": 4}` to all; when all 4 are ready, fires `start_and_deal`.
+
+**Frontend changes:**
+- `showRoundOverlay` no longer sets an auto-dismiss timer.
+- `handleGameState`: overlay is dismissed unconditionally on `phase === "dealing"` (not only when the timer is active), so the manual-ready path also triggers correctly.
+- `handleRoundOver`: appends a "Ready for Next Round" button + "X/4 ready" counter below the team breakdown.
+- New `handleReadyUpdate`: updates the counter element live as players press ready.
+- `dispatchMessage`: registered `ready_update` message type.
+
+---
+
 ## Session 13 — Bug Fixes: Scoring Thresholds, Live Points, Round-Over Screen
 
 **Status:** Complete. 516 tests passing.

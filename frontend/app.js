@@ -180,6 +180,7 @@ function dispatchMessage(msg) {
     case "game_state":   handleGameState(msg);   break;
     case "card_dealt":                           break; // game_state follows
     case "round_over":   handleRoundOver(msg);   break;
+    case "ready_update": handleReadyUpdate(msg); break;
     case "game_over":    handleGameOver(msg);    break;
     case "game_aborted": handleGameAborted(msg); break;
     case "play_valid":   handlePlayValid();      break;
@@ -217,8 +218,9 @@ function handleGameState(msg) {
 
   S.gameState = msg;
 
-  // Auto-dismiss round-over overlay when a new round starts dealing
-  if (msg.phase === "dealing" && _roundOverlayTimer !== null) {
+  // Dismiss round-over overlay whenever a new round starts dealing.
+  // This triggers whether the overlay was auto-timed or awaiting ready clicks.
+  if (msg.phase === "dealing") {
     clearTimeout(_roundOverlayTimer);
     _roundOverlayTimer = null;
     hideOverlay();
@@ -319,7 +321,36 @@ function handleRoundOver(msg) {
     div.appendChild(botSection);
   }
 
+  // Ready-for-next-round section
+  const readySection = document.createElement("div");
+  readySection.style.cssText = "margin-top:12px;display:flex;flex-direction:column;align-items:center;gap:6px;";
+
+  const readyBtn = document.createElement("button");
+  readyBtn.id = "overlay-ready-btn";
+  readyBtn.textContent = "Ready for Next Round";
+  readyBtn.style.cssText = "font-size:14px;padding:10px 20px;";
+  readyBtn.addEventListener("click", () => {
+    sendWS({ action: "ready_for_next_round" });
+    readyBtn.textContent = "Ready ✓";
+    readyBtn.disabled = true;
+    readyBtn.classList.add("btn-passed");
+  });
+  readySection.appendChild(readyBtn);
+
+  const readyCount = document.createElement("div");
+  readyCount.id = "overlay-ready-count";
+  readyCount.style.cssText = "font-size:12px;color:#666;";
+  readyCount.textContent = "0/4 ready";
+  readySection.appendChild(readyCount);
+
+  div.appendChild(readySection);
+
   showRoundOverlay("Round Over", div);
+}
+
+function handleReadyUpdate(msg) {
+  const el = document.getElementById("overlay-ready-count");
+  if (el) el.textContent = `${msg.ready_count}/${msg.total} ready`;
 }
 
 function handleGameOver(msg) {
@@ -378,17 +409,13 @@ function _setOverlayBody(body) {
   }
 }
 
-// Round-over: auto-dismisses after 8s or when next DEALING state arrives.
+// Round-over: stays open until all players press "Ready for Next Round".
+// Dismissed by the next DEALING game_state (in handleGameState).
 function showRoundOverlay(title, body) {
   document.getElementById("overlay-title").textContent = title;
   _setOverlayBody(body);
   document.getElementById("overlay-btn").classList.add("hidden");
   document.getElementById("overlay").classList.remove("hidden");
-  clearTimeout(_roundOverlayTimer);
-  _roundOverlayTimer = setTimeout(() => {
-    _roundOverlayTimer = null;
-    hideOverlay();
-  }, 8000);
 }
 
 // Final overlay (game over / disconnected): requires user to click OK.

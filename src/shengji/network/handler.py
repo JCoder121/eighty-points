@@ -171,6 +171,7 @@ async def start_and_deal(
     )
     room.engine.start_dealing()
     room.passed_in_bidding.clear()
+    room.ready_for_next_round.clear()
     await broadcast_game_states(room)
 
     async def on_card_dealt(player_id: str, card: Card) -> None:
@@ -223,8 +224,8 @@ async def handle_round_end(
         manager.remove_room(room.room_id)
         return
 
-    # Start the next round automatically.
-    asyncio.create_task(start_and_deal(room, manager, deal_delay))
+    # Wait for all players to press "Ready for Next Round" before dealing.
+    # (Handled by the ready_for_next_round action — no auto-start here.)
 
 
 async def abort_room(room: Room, manager: RoomManager, reason: str) -> None:
@@ -401,6 +402,24 @@ async def handle_message(
                     "type": "play_invalid",
                     "reason": str(exc),
                 })
+
+        # ── Ready for next round ──────────────────────────────────────────
+
+        elif action == "ready_for_next_round":
+            if state.phase != GamePhase.ROUND_OVER:
+                await send_error(
+                    room, player_id,
+                    "Can only signal ready during ROUND_OVER phase."
+                )
+                return
+            room.ready_for_next_round.add(player_id)
+            await broadcast_all(room, {
+                "type": "ready_update",
+                "ready_count": len(room.ready_for_next_round),
+                "total": NUM_PLAYERS,
+            })
+            if len(room.ready_for_next_round) >= NUM_PLAYERS:
+                asyncio.create_task(start_and_deal(room, manager, deal_delay))
 
         # ── Unknown action ────────────────────────────────────────────────
 

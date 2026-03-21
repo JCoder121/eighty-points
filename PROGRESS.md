@@ -4,6 +4,54 @@ Newest entries at the top.
 
 ---
 
+## Session 17 — Fix #24: prevent passed players from re-bidding
+
+**Date:** 2026-03-20
+
+**Branch:** `fix/bidding-repassing-24` → merged as PR #27. 531 tests passing.
+
+### Bug fixed
+
+A player who passed during bidding could still send a `bid` action. When they did, `passed_in_bidding` was cleared and re-seeded with just the bidder — other players who had already clicked Pass had their buttons re-disabled with no way to pass again, stalling the game loop indefinitely.
+
+### Fix
+
+Added `players_who_passed: set[str]` to `Room` (never cleared on a new bid, only on new deal). The `bid` action in `handler.py` rejects with an error if `player_id` is in this set. The `pass_bid` action populates both `passed_in_bidding` (closure counter) and `players_who_passed` (permanent block). Frontend disables suit and joker bid buttons when `S.hasPassed` is true.
+
+### Tests added (1 new)
+
+- `TestBidding::test_passed_player_cannot_bid_again`: pass as p0, immediately attempt bid, assert error "already passed" returned.
+
+### Worktree workflow
+
+Used `git worktree add ../eighty_points_issue24 -b fix/bidding-repassing-24` for isolation. Rebased onto `main` after PR #26 merged mid-session.
+
+---
+
+## Session 16 — Fix #20: is_valid_follow free-choice singles in degraded tractor follows
+
+**Date:** 2026-03-20
+
+**Branch:** `fix/tricks-tractor-20` → merged as PR #26. 530 tests passing.
+
+### Bug fixed
+
+`is_valid_follow` for Tractor leads fell back to `get_legal_plays`, accepting only the one specific card combination it returned. This incorrectly rejected valid plays:
+- Player with N suited singles (N > needed) was forced to play the exact subset `get_legal_plays` picked.
+- Player with a pair + extra singles was forced to pair the pair with specific singles instead of any suited singles.
+
+### Fix
+
+Added `_is_valid_tractor_follow` in `engine/tricks.py`. It separates **required cards** (tractors + pairs, greedily claimed from the suited hand) from **free-choice singles**. The proposed play must include all required cards; remaining slots accept any suited singles.
+
+### Tests added (6 new)
+
+- `TestIsValidFollowTractorAllSingles`: any N-choose-k combo of suited singles valid when no pairs/tractors in hand
+- `TestIsValidFollowTractorWithPairs`: pair required, singles free; omitting pair rejected
+- Exact tractor in hand: must play the tractor
+
+---
+
 ## Session 15 — Issue triage, branch rebase
 
 **Date:** 2026-03-20

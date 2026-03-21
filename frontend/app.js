@@ -29,7 +29,9 @@ const SUIT_COLOR_CLASS = {
 };
 
 function rankDisplay(rank) {
-  return rank;  // backend already sends "SJ" / "BJ" for jokers
+  if (rank === "BJ") return "大";
+  if (rank === "SJ") return "小";
+  return rank;
 }
 
 // ── Application state ─────────────────────────────────────────────────────
@@ -300,7 +302,10 @@ function handleRoundOver(msg) {
       for (const p of teamPlayers) {
         const line = document.createElement("div");
         line.className = "player-rank-line";
-        line.textContent = `${p.name} — ${rankDisplay(p.rank)}`;
+        const rankStr = p.old_rank && p.old_rank !== p.rank
+          ? `${rankDisplay(p.old_rank)} → ${rankDisplay(p.rank)}`
+          : rankDisplay(p.rank);
+        line.textContent = `${p.name} — ${rankStr}`;
         block.appendChild(line);
       }
       teamsRow.appendChild(block);
@@ -1109,7 +1114,7 @@ function renderBidArea(area, gs) {
 
   for (const joker of ["small", "big"]) {
     const btn = document.createElement("button");
-    btn.textContent = joker === "small" ? "No Trump (SJ)" : "No Trump (BJ)";
+    btn.textContent = joker === "small" ? "No Trump (小)" : "No Trump (大)";
     btn.disabled    = !available.some(b => b.type === "joker_pair" && b.joker === joker) || S.hasPassed;
     if (!btn.disabled) {
       btn.addEventListener("click", () => sendWS({ action: "bid", joker }));

@@ -14,6 +14,8 @@
 - **Mobile layout:** Basic responsive support added — horizontal scroll hand on portrait mobile (≤600px), larger tap targets.
 - **Active work:** Bug fixes and polish discovered through manual play-testing.
 - **Find Friends mode** is fully implemented: correct phase ordering (declare before exchange), trump-suit/rank/joker restrictions, permanent friend status bar, friend reveal popups.
+- **Jokers display as 大/小** (Big Joker = 大, Small Joker = 小) in all UI locations; backend identifiers unchanged.
+- **End screen shows rank progression** (`old → new`) so players can see what changed each round.
 
 ## What's built
 

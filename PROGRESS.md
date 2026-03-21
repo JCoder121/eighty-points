@@ -4,6 +4,24 @@ Newest entries at the top.
 
 ---
 
+## Session 21 — Joker Chinese labels + end screen rank progression (#35, #33)
+
+**Date:** 2026-03-21
+
+**Branch:** `feature/issues-33-35-joker-labels-rank-progression` → merged to main. 534 tests passing.
+
+### What was changed
+
+- **Joker display (#35):** `rankDisplay` in `app.js` now maps `"BJ"` → `"大"` and `"SJ"` → `"小"`. Affects hand, trick area, and bid buttons ("No Trump (大)" / "No Trump (小)"). Backend identifiers unchanged.
+- **Rank progression (#33):** Backend (`engine.py`) captures each player's rank before advancing and adds `old_rank` to the `round_players` payload. End screen renders `old → new` (e.g. `4 → 5`) when rank changed; shows just the current rank when unchanged.
+
+### Design decisions
+
+- `old_rank` is captured before `advance_rank` is called, so it always reflects the rank at round start.
+- Frontend only shows the arrow when `old_rank !== rank`; no `4 → 4` noise for non-advancing players.
+
+---
+
 ## Session 20 — Find Friends phase ordering, UI, and friend reveal (#23)
 
 **Date:** 2026-03-21

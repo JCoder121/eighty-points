@@ -622,6 +622,17 @@ class GameEngine:
         state.current_turn_id = winner_id
         state.trick_number += 1
 
+        # Update live attacking_points (without bottom-deck multiplier — applied at end_round).
+        # Teams are assigned during BOTTOM_EXCHANGE so is_defending is reliable here.
+        attacker_ids_live = frozenset(p.id for p in state.players if not p.is_defending)
+        state.attacking_points = sum(
+            c.point_value
+            for pid, tricks in state.tricks_won.items()
+            if pid in attacker_ids_live
+            for trick in tricks
+            for c in trick
+        )
+
         # Check if round is over (all hands empty)
         round_over = all(len(p.hand) == 0 for p in state.players)
         if round_over:
@@ -704,11 +715,21 @@ class GameEngine:
         for pid in winning_ids:
             self._player(pid).advance_rank(steps)
 
-        # Check game over: any defender at ACE and defending team defended successfully
-        # (i.e. winner == "defending" or winner == "attacking" with steps == 0)
+        # Capture player info (post-rank-advance, pre-team-swap) for round_over message
+        round_players = [
+            {
+                "id": p.id,
+                "name": p.name,
+                "rank": p.rank.value,
+                "is_defending": p.is_defending,
+            }
+            for p in state.players
+        ]
+
+        # Check game over: defenders WIN the round and one of them is already at ACE.
+        # "attacking 0" (take over at same rank) means defenders LOST — no game over.
         game_over = False
-        if winner != "attacking" or steps == 0:
-            # Defending team held — check if any defender is at ACE
+        if winner == "defending":
             for pid in defender_ids:
                 if self._player(pid).is_at_max_rank:
                     game_over = True
@@ -732,6 +753,7 @@ class GameEngine:
             "steps": steps,
             "game_over": game_over,
             "next_round_leader_id": next_leader_id if not game_over else None,
+            "round_players": round_players,  # team/rank snapshot for round_over display
         }
 
     async def deal_all_cards(

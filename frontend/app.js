@@ -56,6 +56,9 @@ const S = {
   // Bidding state — reset when a new bid is placed or a new deal starts.
   hasPassed:     false,  // true once this player has pressed Pass this round
   lastBidsCount: 0,      // tracks gs.bids.length to detect new bids
+
+  // Rank display sticky-note (client-only toggle).
+  showRankDisplay: false,
 };
 
 // Timer for auto-dismiss round-over overlay
@@ -180,6 +183,7 @@ function dispatchMessage(msg) {
     case "game_state":   handleGameState(msg);   break;
     case "card_dealt":                           break; // game_state follows
     case "round_over":   handleRoundOver(msg);   break;
+    case "ready_update": handleReadyUpdate(msg); break;
     case "game_over":    handleGameOver(msg);    break;
     case "game_aborted": handleGameAborted(msg); break;
     case "play_valid":   handlePlayValid();      break;
@@ -217,8 +221,9 @@ function handleGameState(msg) {
 
   S.gameState = msg;
 
-  // Auto-dismiss round-over overlay when a new round starts dealing
-  if (msg.phase === "dealing" && _roundOverlayTimer !== null) {
+  // Dismiss round-over overlay whenever a new round starts dealing.
+  // This triggers whether the overlay was auto-timed or awaiting ready clicks.
+  if (msg.phase === "dealing") {
     clearTimeout(_roundOverlayTimer);
     _roundOverlayTimer = null;
     hideOverlay();
@@ -244,25 +249,125 @@ function handleGameState(msg) {
 }
 
 function handleRoundOver(msg) {
+  const pts      = msg.attacking_points || 0;
   const isDefWin = msg.winner === "defending";
-  const winner   = isDefWin ? "Defenders" : "Attackers";
-  const pts      = msg.attacking_points;
   const steps    = msg.steps;
-  let outcome;
-  if (steps === 0) {
-    outcome = "Attackers take over as Defenders — no rank change.";
+  const players  = msg.players || [];
+  const bottomDeck = msg.bottom_deck || null;
+
+  // Build HTML content for the overlay body
+  const div = document.createElement("div");
+
+  // Points line
+  const overThreshold = pts >= ATK_THRESHOLD;
+  const ptsLine = document.createElement("div");
+  ptsLine.className = "pts-line";
+  ptsLine.textContent = `Attacking scored ${pts} pts${overThreshold ? " ✓ (≥ 80)" : " ✗ (< 80)"}`;
+  div.appendChild(ptsLine);
+
+  // Outcome line
+  const outLine = document.createElement("div");
+  outLine.className = "outcome-line";
+  if (isDefWin) {
+    outLine.textContent = steps > 0
+      ? `Defenders win — advance ${steps} rank${steps !== 1 ? "s" : ""}.`
+      : "Defenders win — already at max rank.";
+  } else if (steps === 0) {
+    outLine.textContent = "Attackers take over as Defenders — same rank.";
   } else {
-    outcome = `${winner} advance ${steps} rank${steps !== 1 ? "s" : ""}.`;
+    outLine.textContent = `Attackers win — advance ${steps} rank${steps !== 1 ? "s" : ""}.`;
   }
-  const body = `Attacking team scored ${pts} pts. ${outcome}`;
-  showRoundOverlay("Round Over", body);
+  div.appendChild(outLine);
+
+  // Team breakdown
+  if (players.length) {
+    const teamsRow = document.createElement("div");
+    teamsRow.className = "teams-row";
+
+    for (const teamKey of ["defending", "attacking"]) {
+      const block = document.createElement("div");
+      block.className = `team-block ${teamKey}`;
+
+      const label = document.createElement("div");
+      label.className = "team-label";
+      label.textContent = teamKey === "defending" ? "Defenders" : "Attackers";
+      block.appendChild(label);
+
+      const teamPlayers = players.filter(p => p.is_defending === (teamKey === "defending"));
+      for (const p of teamPlayers) {
+        const line = document.createElement("div");
+        line.className = "player-rank-line";
+        line.textContent = `${p.name} — ${rankDisplay(p.rank)}`;
+        block.appendChild(line);
+      }
+      teamsRow.appendChild(block);
+    }
+    div.appendChild(teamsRow);
+  }
+
+  // Bottom deck reveal (only when defenders win)
+  if (isDefWin && bottomDeck && bottomDeck.length) {
+    const botSection = document.createElement("div");
+    botSection.className = "bottom-section";
+
+    const botLabel = document.createElement("div");
+    botLabel.className = "bottom-label";
+    botLabel.textContent = "Attackers' buried cards:";
+    botSection.appendChild(botLabel);
+
+    const botCards = document.createElement("div");
+    botCards.className = "bottom-cards";
+    for (const card of bottomDeck) {
+      botCards.appendChild(makeCardEl(card, false));
+    }
+    botSection.appendChild(botCards);
+    div.appendChild(botSection);
+  }
+
+  // Ready-for-next-round section
+  const readySection = document.createElement("div");
+  readySection.style.cssText = "margin-top:12px;display:flex;flex-direction:column;align-items:center;gap:6px;";
+
+  const readyBtn = document.createElement("button");
+  readyBtn.id = "overlay-ready-btn";
+  readyBtn.textContent = "Ready for Next Round";
+  readyBtn.style.cssText = "font-size:14px;padding:10px 20px;";
+  readyBtn.addEventListener("click", () => {
+    sendWS({ action: "ready_for_next_round" });
+    readyBtn.textContent = "Ready ✓";
+    readyBtn.disabled = true;
+    readyBtn.classList.add("btn-passed");
+  });
+  readySection.appendChild(readyBtn);
+
+  const readyCount = document.createElement("div");
+  readyCount.id = "overlay-ready-count";
+  readyCount.style.cssText = "font-size:12px;color:#666;";
+  readyCount.textContent = "0/4 ready";
+  readySection.appendChild(readyCount);
+
+  div.appendChild(readySection);
+
+  showRoundOverlay("Round Over", div);
+}
+
+function handleReadyUpdate(msg) {
+  const el = document.getElementById("overlay-ready-count");
+  if (el) el.textContent = `${msg.ready_count}/${msg.total} ready`;
 }
 
 function handleGameOver(msg) {
   clearTimeout(_roundOverlayTimer);
   _roundOverlayTimer = null;
-  const winner = msg.winner === "defending" ? "Defenders" : "Attackers";
-  showFinalOverlay("Game Over!", `${winner} win the game!`);
+  const isDefWin = msg.winner === "defending";
+  const div = document.createElement("div");
+  const line = document.createElement("div");
+  line.className = "outcome-line";
+  line.textContent = isDefWin
+    ? "Defenders successfully defended from Ace — they win the game!"
+    : "Attackers win the game!";
+  div.appendChild(line);
+  showFinalOverlay("Game Over!", div);
 }
 
 function handleGameAborted(msg) {
@@ -296,23 +401,30 @@ function handleError(msg) {
 
 // ── Overlays ──────────────────────────────────────────────────────────────
 
-// Round-over: auto-dismisses after 4s or when next DEALING state arrives.
+// Set the overlay body — accepts a string or a DOM Node.
+function _setOverlayBody(body) {
+  const el = document.getElementById("overlay-body");
+  el.innerHTML = "";
+  if (typeof body === "string") {
+    el.textContent = body;
+  } else {
+    el.appendChild(body);
+  }
+}
+
+// Round-over: stays open until all players press "Ready for Next Round".
+// Dismissed by the next DEALING game_state (in handleGameState).
 function showRoundOverlay(title, body) {
   document.getElementById("overlay-title").textContent = title;
-  document.getElementById("overlay-body").textContent  = body;
+  _setOverlayBody(body);
   document.getElementById("overlay-btn").classList.add("hidden");
   document.getElementById("overlay").classList.remove("hidden");
-  clearTimeout(_roundOverlayTimer);
-  _roundOverlayTimer = setTimeout(() => {
-    _roundOverlayTimer = null;
-    hideOverlay();
-  }, 4000);
 }
 
 // Final overlay (game over / disconnected): requires user to click OK.
 function showFinalOverlay(title, body) {
   document.getElementById("overlay-title").textContent = title;
-  document.getElementById("overlay-body").textContent  = body;
+  _setOverlayBody(body);
   document.getElementById("overlay-btn").classList.remove("hidden");
   document.getElementById("overlay").classList.remove("hidden");
 }
@@ -424,6 +536,52 @@ function renderGame(gs) {
   renderPoints(gs);
   renderHand(gs);
   renderActionArea(gs);
+  renderRankDisplay(gs);
+}
+
+// ── Rank sticky-note ──────────────────────────────────────────────────────
+
+function renderRankDisplay(gs) {
+  const panel = document.getElementById("rank-display");
+  if (!S.showRankDisplay) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+
+  const content = document.getElementById("rank-display-content");
+  content.innerHTML = "";
+
+  const teamsKnown = gs.players && gs.players.some(p => p.team !== undefined && p.team !== null);
+
+  for (const p of (gs.players || [])) {
+    const row = document.createElement("div");
+    row.className = "rank-entry" + (p.id === S.playerId ? " is-self" : "");
+
+    const nameSpan = document.createElement("span");
+    nameSpan.textContent = p.name;
+    row.appendChild(nameSpan);
+
+    const right = document.createElement("span");
+    right.style.display = "flex";
+    right.style.gap = "6px";
+    right.style.alignItems = "center";
+
+    const rankSpan = document.createElement("span");
+    rankSpan.className = "rank-val";
+    rankSpan.textContent = rankDisplay(p.rank || "2");
+    right.appendChild(rankSpan);
+
+    if (teamsKnown && p.team) {
+      const tag = document.createElement("span");
+      tag.className = "team-tag " + (p.is_defending ? "def" : "atk");
+      tag.textContent = p.is_defending ? "Def" : "Atk";
+      right.appendChild(tag);
+    }
+
+    row.appendChild(right);
+    content.appendChild(row);
+  }
 }
 
 function renderRoundInfo(gs) {
@@ -491,14 +649,22 @@ function renderTrickArea(gs) {
 
 // ── Points display ────────────────────────────────────────────────────────
 
+// With 2 decks (200 total pts), the threshold for attackers to take over is 80 pts.
+const ATK_THRESHOLD = 80;
+
 function renderPoints(gs) {
   const atk = gs.attacking_points || 0;
   document.getElementById("pts-attacking").textContent = atk;
-  // Attacking team needs ≥ 200 pts (1 deck × 100 pts × 2 decks) to take over.
-  // Show how far they are from the key threshold.
-  const toScore = Math.max(0, 200 - atk);
-  document.getElementById("pts-defending").textContent =
-    atk >= 200 ? "200+ (scoring!)" : `${toScore} to 200`;
+  const statusEl = document.getElementById("pts-threshold-status");
+  if (atk >= ATK_THRESHOLD) {
+    const over = atk - ATK_THRESHOLD;
+    statusEl.textContent = `+${over} over 80 ✓`;
+    statusEl.style.color = "#66ff88";
+  } else {
+    const need = ATK_THRESHOLD - atk;
+    statusEl.textContent = `need ${need} more (of 80)`;
+    statusEl.style.color = "#aaa";
+  }
 }
 
 // ── Hand rendering helpers ────────────────────────────────────────────────
@@ -1115,6 +1281,14 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Rank display toggle
+  document.getElementById("btn-rank-display").addEventListener("click", () => {
+    S.showRankDisplay = !S.showRankDisplay;
+    const btn = document.getElementById("btn-rank-display");
+    btn.classList.toggle("active", S.showRankDisplay);
+    if (S.gameState) renderRankDisplay(S.gameState);
+  });
+
   // Mode selector
   document.getElementById("btn-upgrade").addEventListener("click", () => {
     sendWS({ action: "select_mode", mode: "upgrade" });
@@ -1141,9 +1315,11 @@ document.addEventListener("DOMContentLoaded", () => {
     Object.assign(S, {
       roomId: null, playerId: null, playerName: null,
       isGameMaster: false, roomUpdate: null, gameState: null,
-      awaitingValidation: false,
+      awaitingValidation: false, showRankDisplay: false,
     });
     S.selectedKeys.clear();
+    document.getElementById("btn-rank-display").classList.remove("active");
+    document.getElementById("rank-display").classList.add("hidden");
     showScreen("screen-landing");
   });
 

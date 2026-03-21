@@ -4,6 +4,152 @@ Newest entries at the top.
 
 ---
 
+## Session 14 — Features: Ready Button, Rank Sticky-Note, FF Compatibility
+
+**Status:** Complete. 516 tests passing.
+
+**Branch:** `fix/endgame-points-leader-rotation`
+
+### Feature 2 — Rank sticky-note display (client-side toggle)
+
+A "Ranks" button in the game top-bar (right side) toggles a small floating
+sticky-note panel showing every player's current rank and team role. This is
+entirely client-side — only the player who clicked the button sees it.
+
+**Frontend-only changes:**
+- `index.html`: Added `#btn-rank-display` button to the game top bar; added
+  `#rank-display` sticky panel with `#rank-display-content` (initially hidden).
+  Added CSS for the panel, rank entries, team-role tags (Def/Atk), and active
+  button state.
+- `app.js`:
+  - `S.showRankDisplay: false` added to app state.
+  - `renderRankDisplay(gs)`: renders one row per player with name, rank, and
+    team tag (Def/Atk) when teams are known. Self is highlighted gold.
+  - Called from `renderGame(gs)` so the panel refreshes on every state update.
+  - Toggle button click handler: flips `S.showRankDisplay`, sets `.active` CSS,
+    and re-renders the panel immediately.
+  - Reset to hidden when OK returns player to landing.
+
+---
+
+### Feature 1 — Ready-for-next-round button (replaces auto-proceed)
+
+**Problem:** The round-over overlay auto-dismissed after 8 s, often before
+players had a chance to read the team breakdown or buried cards.
+
+**Solution:** All 4 players must press "Ready for Next Round" (styled like the
+Pass button) before the next deal starts. The button shows "Ready ✓" after
+pressing, and a live "X/4 ready" counter updates for everyone.
+
+**Backend changes:**
+- `room.py`: Added `ready_for_next_round: set[str]` field to `Room`.
+- `handler.py`:
+  - `start_and_deal` now clears `ready_for_next_round` at the start of each round.
+  - `handle_round_end` no longer calls `start_and_deal` automatically for non-game-over rounds.
+  - New `ready_for_next_round` action: adds the player to the set, broadcasts `{"type": "ready_update", "ready_count": N, "total": 4}` to all; when all 4 are ready, fires `start_and_deal`.
+
+**Frontend changes:**
+- `showRoundOverlay` no longer sets an auto-dismiss timer.
+- `handleGameState`: overlay is dismissed unconditionally on `phase === "dealing"` (not only when the timer is active), so the manual-ready path also triggers correctly.
+- `handleRoundOver`: appends a "Ready for Next Round" button + "X/4 ready" counter below the team breakdown.
+- New `handleReadyUpdate`: updates the counter element live as players press ready.
+- `dispatchMessage`: registered `ready_update` message type.
+
+---
+
+### Feature 3 — Verified compatibility with both Find Friends and Upgrade modes
+
+All changes made in Session 14 (and Session 13) were audited for game-mode
+compatibility. No mode-specific conditional branching is present or needed.
+
+**Audit results:**
+- **Live attacking_points** (`engine.py`): uses `p.is_defending` flag, which is
+  set correctly by both `FindFriendsStrategy` (on friend reveal + first trick)
+  and `UpgradeStrategy` (at game start). Handles mid-round friend reveals
+  correctly because the set is recomputed from scratch on every trick.
+- **`round_players` snapshot** (`end_round()`): captured after rank advancement
+  but before team swap — correct in both modes. Both strategies advance
+  `round_leader_id` using `get_next_leader()` which already uses `is_defending`.
+- **Bottom-deck reveal** (`handler.py`): triggered by `winner == "defending"`,
+  which is computed from the universal `compute_rank_advancement()` call —
+  identical logic for both modes.
+- **`start_and_deal`** (`handler.py`): constructs the strategy via `_make_strategy(mode)`
+  and passes it to `GameEngine`. No branching after that — fully mode-agnostic.
+- **`ready_for_next_round`** and **rank sticky-note**: entirely in the network
+  layer and frontend respectively; no engine calls, fully universal.
+
+No code changes required — the implementation was already correct for both modes.
+
+---
+
+## Session 13 — Bug Fixes: Scoring Thresholds, Live Points, Round-Over Screen
+
+**Status:** Complete. 516 tests passing.
+
+**Branch:** `fix/endgame-points-leader-rotation`
+
+### Fix 1 — Scoring thresholds wrong: 80-pt threshold, not 400-pt (backend)
+
+The `compute_rank_advancement` function used `base = 100 * n_decks = 200` for
+the threshold boundaries. This meant attackers needed 400+ points to take over
+as defenders — never achievable without a large bottom-deck multiplier.
+
+The correct Shengji rule for a 2-deck game uses `step = 20 * n_decks = 40`,
+giving thresholds at 0, 40, 80, 120, 160, 200 (attacking). The key threshold
+for attackers to win (take over at same rank) is **80 points**.
+
+- Changed `base = 100 * n_decks` → `step = 20 * n_decks` in `scoring.py`
+- New thresholds for n=2: 0→def+3, 1-39→def+2, 40-79→def+1, 80-119→atk+0,
+  120-159→atk+1, 160-199→atk+2, 200+→atk+3
+- All 15 `TestComputeRankAdvancement` tests updated to match new thresholds
+- Added `test_user_example_95pts_attacking_zero` — the user's concrete example
+
+### Fix 2 — game_over detection triggered incorrectly for "attacking 0" (backend)
+
+The old check `if winner != "attacking" or steps == 0` triggered game_over
+when attackers take over at the same rank (attacking, steps=0). This is wrong:
+when attackers take over, the defenders *lost* the round — game should not end.
+
+- Changed to `if winner == "defending"` — game only ends when defenders actually
+  win a round AND one of them is already at ACE rank.
+
+### Fix 3 — attacking_points not tracked live during game (backend)
+
+`state.attacking_points` was only set in `end_round()`, so the frontend showed
+0 throughout all 25 tricks. Added live update after each trick resolution in
+`play_cards()`: sums attacker trick points without the bottom-deck multiplier
+(which is only applied at round end).
+
+### Fix 4 — Round-over screen too sparse; needs team/bottom-deck info (backend + frontend)
+
+**Backend (`handler.py`):** `round_over` message now includes:
+- `players`: snapshot of all players with their team assignment and rank
+- `bottom_deck`: the 8 buried cards, revealed only when defenders win
+
+**Backend (`engine.py`):** `end_round()` now returns `round_players` in its
+result dict (captured post-rank-advance, pre-team-swap).
+
+**Frontend (`app.js`):** `handleRoundOver` now renders a rich HTML overlay:
+- Attacking points + whether ≥ 80 threshold was crossed
+- Outcome (rank advancement or take-over)
+- Two-column team breakdown with player name and rank
+- Bottom-deck card display (defenders-win only)
+
+`handleGameOver` updated to show a more descriptive message.
+
+### Fix 5 — Points display shows confusing "200 pts needed" (frontend)
+
+Replaced the "Defending: X pts needed" metric with a threshold-relative display:
+- Shows "need X more (of 80)" when below threshold
+- Shows "+X over 80 ✓" (green) when attackers have exceeded the threshold
+
+### Fix 6 — Overlay body changed from `<p>` to `<div>` for rich HTML content
+
+Overlay box widened to 520px (was 400px). Round-over auto-dismiss extended
+from 4 s to 8 s to give players time to read the team/rank breakdown.
+
+---
+
 ## Session 12 — Bug Fixes: Joker Highlighting, Throw Validation, Deal Delay
 
 **Status:** Complete. 515 tests passing.

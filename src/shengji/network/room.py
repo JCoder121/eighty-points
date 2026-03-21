@@ -64,6 +64,7 @@ class Room:
     connections: dict[str, "WebSocket"] = field(default_factory=dict)
     superuser_enabled: bool = False
     passed_in_bidding: set[str] = field(default_factory=set)
+    ready_for_next_round: set[str] = field(default_factory=set)
 
 
 # ── RoomManager ──────────────────────────────────────────────────────────────

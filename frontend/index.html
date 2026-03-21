@@ -476,12 +476,77 @@
       flex-direction: column;
       align-items: center;
       gap: 16px;
-      max-width: 400px;
+      max-width: 520px;
+      width: 90vw;
       text-align: center;
     }
     #overlay-box h2 { font-size: 24px; color: #aaaaff; }
-    #overlay-box p  { font-size: 15px; color: #ccc; line-height: 1.5; }
+    #overlay-body { font-size: 14px; color: #ccc; line-height: 1.6; width: 100%; }
+    #overlay-body .teams-row { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; margin-bottom: 8px; }
+    #overlay-body .team-block { background: #0d0d22; border: 1px solid #333; border-radius: 6px; padding: 8px 14px; min-width: 140px; }
+    #overlay-body .team-block.defending { border-color: #44aa44; }
+    #overlay-body .team-block.attacking { border-color: #aa4444; }
+    #overlay-body .team-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+    #overlay-body .team-block.defending .team-label { color: #44aa44; }
+    #overlay-body .team-block.attacking .team-label { color: #ff6666; }
+    #overlay-body .player-rank-line { font-size: 13px; color: #ddd; }
+    #overlay-body .pts-line { font-size: 15px; font-weight: bold; color: #ffcc44; margin: 6px 0; }
+    #overlay-body .outcome-line { font-size: 14px; color: #aaaaff; }
+    #overlay-body .bottom-section { margin-top: 8px; }
+    #overlay-body .bottom-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+    #overlay-body .bottom-cards { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
     #overlay-box button { font-size: 15px; padding: 10px 24px; }
+
+    /* ------------------------------------------------------------------ */
+    /* Rank sticky-note                                                     */
+    /* ------------------------------------------------------------------ */
+    #rank-display {
+      position: fixed;
+      top: 52px;
+      right: 12px;
+      background: #111130;
+      border: 1px solid #555;
+      border-radius: 8px;
+      padding: 10px 14px;
+      z-index: 50;
+      min-width: 150px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    }
+    #rank-display h4 {
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+    .rank-entry {
+      font-size: 13px;
+      color: #ccc;
+      padding: 2px 0;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .rank-entry.is-self { color: #ffcc44; font-weight: bold; }
+    .rank-entry .rank-val { color: #aaaaff; font-weight: bold; }
+    .rank-entry .team-tag {
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 8px;
+      align-self: center;
+    }
+    .rank-entry .team-tag.def { background: #225522; color: #88ff88; }
+    .rank-entry .team-tag.atk { background: #552222; color: #ff8888; }
+
+    #btn-rank-display {
+      font-size: 12px;
+      padding: 4px 10px;
+      background: transparent;
+      border-color: #444;
+      color: #aaa;
+    }
+    #btn-rank-display:hover:not(:disabled) { background: #1a1a3a; border-color: #888; color: #fff; }
+    #btn-rank-display.active { border-color: #aaaaff; color: #aaaaff; background: #1a1a3a; }
 
     /* ------------------------------------------------------------------ */
     /* Miscellaneous                                                        */
@@ -578,6 +643,13 @@
   <div class="top-bar">
     <span class="room-code" id="game-room-code" title="Click to copy">ROOM CODE: ------</span>
     <span class="trump-info" id="game-trump-info">—</span>
+    <button id="btn-rank-display" title="Toggle player rank display">Ranks</button>
+  </div>
+
+  <!-- Rank sticky-note (client-only, toggled per player) -->
+  <div id="rank-display" class="hidden">
+    <h4>Current Ranks</h4>
+    <div id="rank-display-content"></div>
   </div>
 
   <div class="game-body">
@@ -610,14 +682,12 @@
     <!-- Points -->
     <div id="points-display">
       <div>
-        <span class="label">Attacking: </span>
+        <span class="label">Atk: </span>
         <span class="value" id="pts-attacking">0</span>
         <span class="label"> pts</span>
       </div>
       <div>
-        <span class="label">Defending: </span>
-        <span class="value" id="pts-defending">—</span>
-        <span class="label"> pts needed</span>
+        <span class="value" id="pts-threshold-status">need 80 to win</span>
       </div>
     </div>
 
@@ -639,7 +709,7 @@
 <div id="overlay" class="hidden">
   <div id="overlay-box">
     <h2 id="overlay-title">—</h2>
-    <p  id="overlay-body">—</p>
+    <div id="overlay-body"></div>
     <button id="overlay-btn" class="hidden">OK</button>
   </div>
 </div>

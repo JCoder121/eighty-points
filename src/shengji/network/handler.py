@@ -171,6 +171,7 @@ async def start_and_deal(
     )
     room.engine.start_dealing()
     room.passed_in_bidding.clear()
+    room.ready_for_next_round.clear()
     await broadcast_game_states(room)
 
     async def on_card_dealt(player_id: str, card: Card) -> None:
@@ -197,12 +198,21 @@ async def handle_round_end(
         await broadcast_all(room, {"type": "error", "message": str(exc)})
         return
 
+    # bottom_deck is not modified by end_round — still holds the buried cards.
+    # Only reveal it to everyone when defenders win (attackers didn't meet threshold).
+    winner = result["winner"]
+    reveal_bottom = winner == "defending"
     await broadcast_all(room, {
         "type": "round_over",
         "attacking_points": result["attacking_points"],
-        "winner": result["winner"],
+        "winner": winner,
         "steps": result["steps"],
         "game_over": result["game_over"],
+        "players": result.get("round_players", []),   # team/rank snapshot this round
+        "bottom_deck": (
+            [c.to_json() for c in room.game_state.bottom_deck]
+            if reveal_bottom else None
+        ),
     })
     await broadcast_game_states(room)
 
@@ -214,8 +224,8 @@ async def handle_round_end(
         manager.remove_room(room.room_id)
         return
 
-    # Start the next round automatically.
-    asyncio.create_task(start_and_deal(room, manager, deal_delay))
+    # Wait for all players to press "Ready for Next Round" before dealing.
+    # (Handled by the ready_for_next_round action — no auto-start here.)
 
 
 async def abort_room(room: Room, manager: RoomManager, reason: str) -> None:
@@ -392,6 +402,24 @@ async def handle_message(
                     "type": "play_invalid",
                     "reason": str(exc),
                 })
+
+        # ── Ready for next round ──────────────────────────────────────────
+
+        elif action == "ready_for_next_round":
+            if state.phase != GamePhase.ROUND_OVER:
+                await send_error(
+                    room, player_id,
+                    "Can only signal ready during ROUND_OVER phase."
+                )
+                return
+            room.ready_for_next_round.add(player_id)
+            await broadcast_all(room, {
+                "type": "ready_update",
+                "ready_count": len(room.ready_for_next_round),
+                "total": NUM_PLAYERS,
+            })
+            if len(room.ready_for_next_round) >= NUM_PLAYERS:
+                asyncio.create_task(start_and_deal(room, manager, deal_delay))
 
         # ── Unknown action ────────────────────────────────────────────────
 

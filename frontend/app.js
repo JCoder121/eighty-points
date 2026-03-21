@@ -537,10 +537,40 @@ function renderGame(gs) {
   renderRoundInfo(gs);
   renderTrickArea(gs);
   checkFriendReveals(gs);
+  renderFriendStatus(gs);
   renderPoints(gs);
   renderHand(gs);
   renderActionArea(gs);
   renderRankDisplay(gs);
+}
+
+// ── Friend declaration status bar ─────────────────────────────────────────
+
+function renderFriendStatus(gs) {
+  const el = document.getElementById("friend-status");
+  const decls = gs.friend_declarations;
+  if (gs.mode !== "find_friends" || !decls || decls.length === 0) {
+    el.classList.add("hidden");
+    return;
+  }
+
+  const decl = decls[0];
+  const card = decl.card;
+  const sym  = SUIT_SYMBOL[card.suit] || card.suit;
+
+  if (decl.resolved_player_id) {
+    const friend = gs.players.find(p => p.id === decl.resolved_player_id);
+    const name   = friend ? friend.name : decl.resolved_player_id;
+    el.textContent = `${name} is the friend!`;
+    el.classList.remove("hidden");
+    el.classList.add("resolved");
+  } else {
+    const leader = gs.players.find(p => p.id === gs.round_leader_id);
+    const name   = leader ? leader.name : gs.round_leader_id;
+    el.textContent = `${name} is looking for ${card.rank}${sym}`;
+    el.classList.remove("hidden");
+    el.classList.remove("resolved");
+  }
 }
 
 // ── Friend reveal popups ──────────────────────────────────────────────────

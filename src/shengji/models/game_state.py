@@ -146,6 +146,8 @@ class GameState:
             ),
             "cards_dealt_count": self.cards_dealt_count,
             "revealed_friends": list(self.revealed_friends),
+            "round_leader_id": self.round_leader_id,
+            "friend_declarations": [fd.to_json() for fd in self.friend_declarations],
         }
 
     def to_superuser_view(self) -> dict:

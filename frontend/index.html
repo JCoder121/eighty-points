@@ -551,6 +551,26 @@
     #btn-rank-display.active { border-color: #aaaaff; color: #aaaaff; background: #1a1a3a; }
 
     /* ------------------------------------------------------------------ */
+    /* Friend declaration status bar                                       */
+    /* ------------------------------------------------------------------ */
+    #friend-status {
+      font-size: 13px;
+      color: #aaa;
+      text-align: center;
+      padding: 4px 12px;
+      background: #0d0d22;
+      border: 1px solid #333;
+      border-radius: 6px;
+      width: 100%;
+      max-width: 600px;
+    }
+    #friend-status.resolved {
+      color: #88ff88;
+      border-color: #44aa44;
+      background: rgba(34, 85, 34, 0.25);
+    }
+
+    /* ------------------------------------------------------------------ */
     /* Friend reveal popup                                                 */
     /* ------------------------------------------------------------------ */
     .friend-reveal-popup {
@@ -735,6 +755,9 @@
         <div class="trick-cards"       id="cards-bottom"></div>
       </div>
     </div>
+
+    <!-- Find Friends declaration status -->
+    <div id="friend-status" class="hidden"></div>
 
     <!-- Points -->
     <div id="points-display">

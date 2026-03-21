@@ -136,6 +136,20 @@ class TestJoinRoom:
         room = m.get_room(room_id)
         assert len(room.game_state.players) == NUM_PLAYERS
 
+    def test_duplicate_name_raises(self):
+        m = _manager()
+        room_id = self._create(m)  # Alice already in room
+        with pytest.raises(ValueError, match="already taken"):
+            m.join_room(room_id, "Alice")
+
+    def test_different_name_allowed_after_duplicate_attempt(self):
+        m = _manager()
+        room_id = self._create(m)
+        with pytest.raises(ValueError):
+            m.join_room(room_id, "Alice")
+        pid = m.join_room(room_id, "Bob")  # should succeed
+        assert pid
+
 
 # ---------------------------------------------------------------------------
 # get_room / remove_room

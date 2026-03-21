@@ -118,7 +118,8 @@ class RoomManager:
         Raises
         ------
         ValueError
-            If the room does not exist, is full, or the game has started.
+            If the room does not exist, is full, the game has started, or the
+            name is already taken.
         """
         room = self.get_room(room_id)
         if room is None:
@@ -127,6 +128,9 @@ class RoomManager:
             raise ValueError("Room is full (4 players maximum).")
         if room.game_state.phase != GamePhase.WAITING:
             raise ValueError("Game has already started — cannot join mid-game.")
+        existing_names = {p.name for p in room.game_state.players}
+        if player_name in existing_names:
+            raise ValueError(f"Name {player_name!r} is already taken in this room.")
 
         player_id = self._gen_player_id()
         player = Player(id=player_id, name=player_name)

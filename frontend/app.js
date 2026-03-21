@@ -460,6 +460,12 @@ function updateTrumpInfo(gs) {
     const rank = ref ? rankDisplay(ref.rank) : "2";
     text = `Currently at Rank ${rank}`;
   }
+  const leader = (gs.players || []).find(p => p.id === gs.round_leader_id);
+  const inRound0Bidding = gs.round_number === 0 &&
+    ["waiting", "dealing", "bidding_after_deal"].includes(gs.phase);
+  if (leader && !inRound0Bidding) {
+    text += ` · Leader: ${leader.name}`;
+  }
   document.getElementById("lobby-trump-info").textContent = text;
   document.getElementById("game-trump-info").textContent  = text;
 }

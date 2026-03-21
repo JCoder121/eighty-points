@@ -8,7 +8,7 @@
 ## Where we are
 
 - **All milestones (M0–M8) are complete.** The game is playable end-to-end in the browser.
-- **534 tests passing** (pytest).
+- **539 tests passing** (pytest).
 - **Current branch:** `main`
 - **No automated frontend tests yet.** All frontend testing is manual.
 - **Mobile layout:** Basic responsive support added — horizontal scroll hand on portrait mobile (≤600px), larger tap targets.
@@ -16,6 +16,8 @@
 - **Find Friends mode** is fully implemented: correct phase ordering (declare before exchange), trump-suit/rank/joker restrictions, permanent friend status bar, friend reveal popups.
 - **Jokers display as 大/小** (Big Joker = 大, Small Joker = 小) in all UI locations; backend identifiers unchanged.
 - **End screen shows rank progression** (`old → new`) so players can see what changed each round.
+- **Unique player names enforced:** server rejects duplicate names in a room (HTTP 400).
+- **Leader displayed in UI:** trump info bar shows `· Leader: {name}` after leader is determined; round 2+ leader is predetermined (not overridden by bidding).
 
 ## What's built
 

@@ -4,6 +4,25 @@ Newest entries at the top.
 
 ---
 
+## Session 22 — Unique player names + leader display/logic (#31, #32)
+
+**Date:** 2026-03-21
+
+**Branch:** `fix/issues-31-32` → merged to main. 539 tests passing.
+
+### What was changed
+
+- **Unique names (#31):** `room.py` `join_room()` now rejects duplicate names within a room with a `ValueError` → HTTP 400. Frontend already surfaced `detail` errors via `setLandingError`.
+- **Leader logic (#32):** `engine.py` `close_bidding()` only sets `round_leader_id` from the bid winner in round 1; subsequent rounds keep the predetermined leader. `current_leader_id` always mirrors `round_leader_id` after close.
+- **Leader UI (#32):** `updateTrumpInfo()` in `app.js` appends ` · Leader: {name}` to the trump info bar after bidding completes in round 1 and immediately in all subsequent rounds.
+
+### Design decisions
+
+- `round_number` starts at 1 (not 0), so the guard is `round_number == 1`.
+- Leader display is suppressed during WAITING/DEALING/BIDDING_AFTER_DEAL in round 1 (leader not yet known). Shown in all other phases including BOTTOM_EXCHANGE onwards.
+
+---
+
 ## Session 21 — Joker Chinese labels + end screen rank progression (#35, #33)
 
 **Date:** 2026-03-21

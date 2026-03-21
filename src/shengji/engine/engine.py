@@ -383,8 +383,9 @@ class GameEngine:
 
         # Winning bid is the last entry in the bid history.
         winning_bid = state.bids[-1]
-        state.round_leader_id = winning_bid.player_id
-        state.current_leader_id = winning_bid.player_id
+        if state.round_number == 1:
+            state.round_leader_id = winning_bid.player_id
+        state.current_leader_id = state.round_leader_id
         state.trump_context = winning_bid.resulting_trump
 
         # Assign teams now that the round leader (bid winner) is known.

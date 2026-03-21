@@ -369,3 +369,43 @@ class TestCloseBidding:
         self.engine.place_bid("p2", [c2, c2])
         self.engine.close_bidding()
         assert self.engine.state.round_leader_id == "p2"
+
+
+class TestCloseBiddingRound2:
+    """round_leader_id must not be overridden by bidding in rounds > 0."""
+
+    def _make_engine_round2(self) -> GameEngine:
+        state = _make_state()
+        state.round_number = 2
+        state.round_leader_id = "p0"  # predetermined leader for round 2
+        engine = _make_engine(state)
+        engine.start_dealing()
+        while engine.state.draw_pile:
+            engine.deal_next_card()
+        return engine
+
+    def test_round2_bid_does_not_change_round_leader(self):
+        engine = self._make_engine_round2()
+        card = _card(Suit.HEARTS, Rank.TWO)
+        engine._player("p1").hand = [card]
+        engine.place_bid("p1", [card])
+        engine.close_bidding()
+        # p1 won the bid but round_leader_id must remain p0
+        assert engine.state.round_leader_id == "p0"
+
+    def test_round2_bid_still_sets_trump_context(self):
+        engine = self._make_engine_round2()
+        card = _card(Suit.SPADES, Rank.TWO)
+        engine._player("p1").hand = [card]
+        engine.place_bid("p1", [card])
+        engine.close_bidding()
+        assert engine.state.trump_context is not None
+        assert engine.state.trump_context.trump_suit == Suit.SPADES
+
+    def test_round2_current_leader_follows_round_leader(self):
+        engine = self._make_engine_round2()
+        card = _card(Suit.HEARTS, Rank.TWO)
+        engine._player("p2").hand = [card]
+        engine.place_bid("p2", [card])
+        engine.close_bidding()
+        assert engine.state.current_leader_id == "p0"

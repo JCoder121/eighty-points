@@ -580,6 +580,40 @@
       color: #888;
       text-align: center;
     }
+
+    /* ------------------------------------------------------------------ */
+    /* Mobile / small-screen overrides                                      */
+    /* ------------------------------------------------------------------ */
+    @media (max-width: 600px) {
+      /* Hand: horizontal scroll instead of wrap */
+      #hand-area {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        justify-content: flex-start;
+        -webkit-overflow-scrolling: touch;
+        max-width: 100%;
+        padding-bottom: 12px;   /* room for scrollbar */
+      }
+
+      /* Hide the trump-rank separator (gold highlight is sufficient) */
+      .hand-trump-sep { display: none; }
+
+      /* Larger tap targets with readable text */
+      .card {
+        width: 54px;
+        height: 76px;
+        font-size: 16px;
+      }
+      .card .card-rank { font-size: 17px; }
+      .card .card-suit { font-size: 30px; }
+
+      /* Rank sticky note: don't hog half the screen */
+      #rank-display {
+        min-width: unset;
+        right: 8px;
+        left: 8px;
+      }
+    }
   </style>
 </head>
 <body>

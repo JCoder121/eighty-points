@@ -4,6 +4,31 @@ Newest entries at the top.
 
 ---
 
+## Session 19 — Mobile responsive layout (explore/mobile-responsive)
+
+**Date:** 2026-03-21
+
+**Branch:** `explore/mobile-responsive` → PR pending. 531 tests passing.
+
+### What was changed
+
+- Added `@media (max-width: 600px)` block to `frontend/index.html`:
+  - Hand area switches from `flex-wrap: wrap` to `nowrap` + `overflow-x: auto` (horizontal scroll)
+  - Trump-rank separator hidden on mobile (gold border/glow is sufficient)
+  - Cards bumped from 38×56px → 54×76px with larger rank (17px) and suit (30px) text
+  - Rank sticky note goes full-width instead of fixed `min-width: 150px` from right edge
+- Added `scripts/dev_mobile.sh`: starts uvicorn + ngrok, fetches public URL via ngrok API, generates QR code PNG and opens in Preview
+- Added shell aliases to `~/.bash_profile`: `eighty`, `eps`, `epm`, `c`
+- Closed Playwright issues #12–17, consolidated into single issue #29 with checkbox checklist
+
+### Design decisions
+
+- Landscape mobile not targeted (phone width >600px in landscape falls through to desktop layout — acceptable)
+- Trump separator removed on mobile only; desktop layout unchanged
+- No JS changes — purely CSS media query
+
+---
+
 ## Session 18 — Feature #21: per-game JSONL event logger
 
 **Date:** 2026-03-20

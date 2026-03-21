@@ -743,13 +743,22 @@ function renderHand(gs) {
   if (isBidding) {
     const trumpRank = getTrumpRank(gs);
 
-    // Main group: non-trump-rank, non-joker cards.
-    // Highlighted group: trump-rank cards (any suit) + jokers.
-    const mainItems      = handCards.filter(({ card }) =>
-      !isJoker(card) && (trumpRank === null || card.rank !== trumpRank)
-    );
+    // A joker is only biddable as "no trump" when the player holds a PAIR of
+    // that joker type (SJ+SJ or BJ+BJ).  Single jokers cannot win a bid, so
+    // they stay in the main group without the "bid these!" highlight.
+    const sjCount = handCards.filter(({ card }) => card.rank === "SJ").length;
+    const bjCount = handCards.filter(({ card }) => card.rank === "BJ").length;
+    const jokerHighlighted = ({ card }) =>
+      (card.rank === "SJ" && sjCount >= 2) || (card.rank === "BJ" && bjCount >= 2);
+
+    // Main group: non-trump-rank cards + un-paired jokers.
+    // Highlighted group: trump-rank cards (any suit) + paired jokers.
+    const mainItems = handCards.filter(({ card }) => {
+      if (isJoker(card)) return !jokerHighlighted({ card });
+      return trumpRank === null || card.rank !== trumpRank;
+    });
     const highlightItems = handCards.filter(({ card }) =>
-      isJoker(card) || (trumpRank !== null && card.rank === trumpRank)
+      jokerHighlighted({ card }) || (trumpRank !== null && card.rank === trumpRank)
     );
 
     handHeader.textContent = `Your hand (${handCards.length} cards)`;

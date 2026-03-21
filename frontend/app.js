@@ -29,9 +29,7 @@ const SUIT_COLOR_CLASS = {
 };
 
 function rankDisplay(rank) {
-  if (rank === "small_joker") return "SJ";
-  if (rank === "big_joker")   return "BJ";
-  return rank;
+  return rank;  // backend already sends "SJ" / "BJ" for jokers
 }
 
 // ── Application state ─────────────────────────────────────────────────────
@@ -670,7 +668,7 @@ function renderPoints(gs) {
 // ── Hand rendering helpers ────────────────────────────────────────────────
 
 function isJoker(card) {
-  return card.rank === "small_joker" || card.rank === "big_joker";
+  return card.rank === "SJ" || card.rank === "BJ";
 }
 
 // Return true if card is a trump card given the resolved trump context.
@@ -711,7 +709,7 @@ function sortBiddingHighlight(items) {
   const SUITS = ["diamonds", "clubs", "hearts", "spades"];
   return [...items].sort((a, b) => {
     const aJ = isJoker(a.card), bJ = isJoker(b.card);
-    if (aJ && bJ) return (a.card.rank === "big_joker" ? 1 : 0) - (b.card.rank === "big_joker" ? 1 : 0);
+    if (aJ && bJ) return (a.card.rank === "BJ" ? 1 : 0) - (b.card.rank === "BJ" ? 1 : 0);
     if (aJ) return 1;
     if (bJ) return -1;
     return SUITS.indexOf(a.card.suit) - SUITS.indexOf(b.card.suit);
@@ -904,8 +902,8 @@ function cardSortKey(card, ctx) {
   const SUITS = ["diamonds", "clubs", "hearts", "spades"];
   const ri = RANK_ORDER.indexOf(card.rank);
 
-  if (card.rank === "small_joker") return [6, 0];
-  if (card.rank === "big_joker")   return [6, 1];
+  if (card.rank === "SJ") return [6, 0];
+  if (card.rank === "BJ") return [6, 1];
 
   if (!ctx || !ctx.trump_rank) {
     const si = SUITS.indexOf(card.suit);

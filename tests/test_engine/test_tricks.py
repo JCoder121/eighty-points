@@ -646,3 +646,87 @@ class TestIsValidFollowPairHasGroup:
         assert is_valid_follow([_ACE_H, _ACE_H], hand, IdenticalGroup(2), "hearts", self.ctx)
         # 4♥5♥ is NOT valid — hand has a pair so must use it
         assert not is_valid_follow([_FOUR_H, _FIVE_H], hand, IdenticalGroup(2), "hearts", self.ctx)
+
+
+# ---------------------------------------------------------------------------
+# is_valid_follow — tractor lead regression tests (issue #20)
+# ---------------------------------------------------------------------------
+# Context: trump_rank=2, trump_suit=HEARTS.
+# Tractor(2, 2) requires 4 cards: 2 consecutive pairs.
+
+_Q_H2 = _c(Suit.HEARTS, Rank.QUEEN)
+_K_H2 = _c(Suit.HEARTS, Rank.KING)
+_A_H2 = _c(Suit.HEARTS, Rank.ACE)
+_J_H2 = _c(Suit.HEARTS, Rank.JACK)
+_T_H2 = _c(Suit.HEARTS, Rank.TEN)
+_TWO_S2 = _c(Suit.SPADES, Rank.TWO)   # off-suit trump rank → trump
+_TWO_D2 = _c(Suit.DIAMONDS, Rank.TWO) # off-suit trump rank → trump
+_CTX_HEARTS_TRUMP = TrumpContext(trump_rank=Rank.TWO, trump_suit=Suit.HEARTS)
+_TRACTOR_2_2 = Tractor(multiplicity=2, length=2)
+
+
+class TestIsValidFollowTractorAllSingles:
+    """Bug fix (issue #20): when hand has only trump singles, any 4 suited cards
+    are a valid degraded follow to a trump tractor lead."""
+
+    ctx = _CTX_HEARTS_TRUMP
+
+    def test_any_four_singles_valid_when_no_pairs(self):
+        """5 trump singles — player may play any 4."""
+        hand = [_A_H2, _K_H2, _Q_H2, _J_H2, _T_H2]
+        led = _TRACTOR_2_2
+        # All combinations of 4 should be valid
+        assert is_valid_follow([_A_H2, _K_H2, _Q_H2, _J_H2], hand, led, "trump", self.ctx)
+        assert is_valid_follow([_A_H2, _K_H2, _Q_H2, _T_H2], hand, led, "trump", self.ctx)
+        assert is_valid_follow([_A_H2, _K_H2, _J_H2, _T_H2], hand, led, "trump", self.ctx)
+        assert is_valid_follow([_A_H2, _Q_H2, _J_H2, _T_H2], hand, led, "trump", self.ctx)
+        assert is_valid_follow([_K_H2, _Q_H2, _J_H2, _T_H2], hand, led, "trump", self.ctx)
+
+    def test_must_play_all_suited_when_exactly_four(self):
+        """Exactly 4 trump singles: must play all of them."""
+        hand = [_A_H2, _K_H2, _Q_H2, _J_H2]
+        led = _TRACTOR_2_2
+        assert is_valid_follow([_A_H2, _K_H2, _Q_H2, _J_H2], hand, led, "trump", self.ctx)
+
+    def test_off_suit_invalid_when_trump_available(self):
+        """Must play trump cards before off-suit."""
+        hand = [_A_H2, _K_H2, _Q_H2, _J_H2, _c(Suit.SPADES, Rank.ACE)]
+        led = _TRACTOR_2_2
+        # Playing the spade instead of a trump is illegal
+        assert not is_valid_follow(
+            [_A_H2, _K_H2, _Q_H2, _c(Suit.SPADES, Rank.ACE)], hand, led, "trump", self.ctx
+        )
+
+
+class TestIsValidFollowTractorWithPairs:
+    """When hand has a pair but no tractor, the pair is required; singles are free."""
+
+    ctx = _CTX_HEARTS_TRUMP
+
+    def test_pair_required_singles_free(self):
+        """Hand has pair TWO_S/TWO_D (same card_order) + 3 singles.
+        Must include the pair; can choose any 2 of 3 singles."""
+        # TWO_S and TWO_D are both off-suit trump rank → same card_order (2, 0) → pair
+        hand = [_A_H2, _K_H2, _Q_H2, _TWO_S2, _TWO_D2]
+        led = _TRACTOR_2_2
+        # All combos of pair + 2 singles are valid
+        assert is_valid_follow([_TWO_S2, _TWO_D2, _A_H2, _K_H2], hand, led, "trump", self.ctx)
+        assert is_valid_follow([_TWO_S2, _TWO_D2, _A_H2, _Q_H2], hand, led, "trump", self.ctx)
+        assert is_valid_follow([_TWO_S2, _TWO_D2, _K_H2, _Q_H2], hand, led, "trump", self.ctx)
+
+    def test_must_include_pair(self):
+        """Playing 4 singles when a pair is available is invalid."""
+        hand = [_A_H2, _K_H2, _Q_H2, _TWO_S2, _TWO_D2]
+        led = _TRACTOR_2_2
+        # Omitting the pair is illegal
+        assert not is_valid_follow([_A_H2, _K_H2, _Q_H2, _TWO_S2], hand, led, "trump", self.ctx)
+        assert not is_valid_follow([_A_H2, _K_H2, _Q_H2, _TWO_D2], hand, led, "trump", self.ctx)
+
+    def test_exact_tractor_required_when_available(self):
+        """Hand has a full tractor — must play it (or one of its valid sub-tractors)."""
+        # A♥A♥K♥K♥: two pairs at adjacent positions → tractor
+        hand = [_A_H2, _A_H2, _K_H2, _K_H2]
+        led = _TRACTOR_2_2
+        assert is_valid_follow([_A_H2, _A_H2, _K_H2, _K_H2], hand, led, "trump", self.ctx)
+        # Playing non-tractor cards when a full tractor exists is invalid
+        assert not is_valid_follow([_A_H2, _A_H2, _Q_H2, _J_H2], hand, led, "trump", self.ctx)

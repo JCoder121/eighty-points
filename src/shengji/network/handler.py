@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import WebSocket, WebSocketDisconnect
 
 from shengji.engine.engine import GameEngine
+from shengji.engine.logger import GameLogger
 from shengji.engine.tricks import get_legal_plays, is_valid_follow, validate_throw
 from shengji.models.card import Card, Rank, Suit, SUITED_SUITS
 from shengji.models.friend_declaration import FriendDeclaration
@@ -169,6 +170,8 @@ async def start_and_deal(
     room.engine = GameEngine(
         room.game_state, strategy, deal_delay=deal_delay
     )
+    if room.logger is None:
+        room.logger = GameLogger()
     room.engine.start_dealing()
     room.passed_in_bidding.clear()
     room.players_who_passed.clear()
@@ -187,6 +190,8 @@ async def start_and_deal(
     await room.engine.deal_all_cards(on_card_dealt=on_card_dealt)
     # Phase is now BIDDING_AFTER_DEAL.
     await broadcast_game_states(room)
+    if room.logger:
+        room.logger.log_round_start(room.game_state)
 
 
 async def handle_round_end(
@@ -198,6 +203,9 @@ async def handle_round_end(
     except ValueError as exc:
         await broadcast_all(room, {"type": "error", "message": str(exc)})
         return
+
+    if room.logger:
+        room.logger.log_round_end(result, room.game_state)
 
     # bottom_deck is not modified by end_round — still holds the buried cards.
     # Only reveal it to everyone when defenders win (attackers didn't meet threshold).
@@ -218,6 +226,9 @@ async def handle_round_end(
     await broadcast_game_states(room)
 
     if result["game_over"]:
+        if room.logger:
+            room.logger.log_game_over(result["winner"], result.get("round_players", []))
+            room.logger.close()
         await broadcast_all(room, {
             "type": "game_over",
             "winner": result["winner"],
@@ -239,6 +250,8 @@ async def abort_room(room: Room, manager: RoomManager, reason: str) -> None:
         except Exception:
             pass
     room.connections.clear()
+    if room.logger:
+        room.logger.close()
     manager.remove_room(room.room_id)
 
 
@@ -318,7 +331,9 @@ async def handle_message(
                 await send_error(room, player_id, "Bid must specify 'suit' or 'joker'.")
                 return
 
-            engine.place_bid(player_id, bid_cards)
+            bid = engine.place_bid(player_id, bid_cards)
+            if room.logger:
+                room.logger.log_bid(player_id, bid_cards, bid)
             # Reset pass tracking.  Auto-count the bidder as passed (they have
             # already committed; the remaining 3 players must pass to close).
             room.passed_in_bidding.clear()
@@ -331,8 +346,13 @@ async def handle_message(
                 return
             room.passed_in_bidding.add(player_id)
             room.players_who_passed.add(player_id)
+            if room.logger:
+                room.logger.log_pass_bid(player_id)
             if len(room.passed_in_bidding) >= NUM_PLAYERS:
                 engine.close_bidding()
+                if room.logger:
+                    redeal = (state.phase == GamePhase.DEALING)
+                    room.logger.log_bidding_closed(state, redeal)
                 room.passed_in_bidding.clear()
                 await broadcast_game_states(room)
                 # If close_bidding triggered a re-deal, engine has already
@@ -348,6 +368,8 @@ async def handle_message(
                 return
             cards = _cards_from_json(data.get("cards_to_put_back", []))
             engine.exchange_bottom(player_id, cards)
+            if room.logger:
+                room.logger.log_bottom_exchange(player_id, cards)
             await broadcast_game_states(room)
 
         # ── Friend declaration ────────────────────────────────────────────
@@ -365,6 +387,8 @@ async def handle_message(
                 for d in raw_decls
             ]
             engine.declare_friends(player_id, declarations)
+            if room.logger:
+                room.logger.log_friend_declarations(player_id, declarations)
             await broadcast_game_states(room)
 
         # ── Playing a trick ───────────────────────────────────────────────
@@ -374,7 +398,43 @@ async def handle_message(
                 await send_error(room, player_id, "Game has not started yet.")
                 return
             cards = _cards_from_json(data.get("cards", []))
+            # Snapshot state before play_cards mutates it.
+            revealed_before = set(state.revealed_friends)
+            trick_pos = len(state.current_trick)
+            trick_num = state.trick_number
+            trick_snapshot = [(pid, list(cs)) for pid, cs in state.current_trick]
+
             result = engine.play_cards(player_id, cards)
+
+            if room.logger:
+                room.logger.log_play_cards(player_id, cards, trick_num, trick_pos)
+
+                # Friend reveal detection (no-op in upgrade mode).
+                new_reveals = state.revealed_friends - revealed_before
+                for rpid in new_reveals:
+                    decl = next(
+                        d for d in state.friend_declarations
+                        if d.resolved_player_id == rpid
+                    )
+                    room.logger.log_friend_revealed(rpid, decl.card, decl.ordinal)
+
+                if result.get("trick_complete"):
+                    # trick_snapshot has the first 3 plays; append the 4th.
+                    trick_snapshot.append((player_id, list(cards)))
+                    plays = [
+                        {"player_id": pid, "cards": [c.to_json() for c in cs]}
+                        for pid, cs in trick_snapshot
+                    ]
+                    trick_cards_flat = [c for _, cs in trick_snapshot for c in cs]
+                    trick_points = sum(c.point_value for c in trick_cards_flat)
+                    room.logger.log_trick_complete(
+                        trick_num,
+                        result["trick_winner"],
+                        plays,
+                        trick_points,
+                        state.attacking_points,
+                    )
+
             await broadcast_game_states(room)
             if result.get("round_over"):
                 await handle_round_end(room, manager, deal_delay)
@@ -433,6 +493,11 @@ async def handle_message(
 
     except ValueError as exc:
         # Engine validation failures are non-fatal; report to the player.
+        if room.logger:
+            try:
+                room.logger.log_error(player_id, action, str(exc))
+            except Exception:
+                pass
         await send_error(room, player_id, str(exc))
 
 

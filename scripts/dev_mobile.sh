@@ -3,6 +3,15 @@
 
 set -e
 
+cleanup() {
+  echo ""
+  echo "Shutting down..."
+  kill "$UVICORN_PID" "$NGROK_PID" 2>/dev/null
+  wait "$UVICORN_PID" "$NGROK_PID" 2>/dev/null
+  echo "Done."
+  exit 0
+}
+
 # Start uvicorn in the background
 echo "Starting uvicorn..."
 uvicorn shengji.network.app:app --reload &
@@ -15,6 +24,8 @@ sleep 2
 echo "Starting ngrok..."
 ngrok http 8000 &
 NGROK_PID=$!
+
+trap cleanup INT TERM
 
 # Wait for ngrok to be ready
 sleep 3
@@ -41,4 +52,4 @@ fi
 
 # Keep running until Ctrl+C
 echo "Press Ctrl+C to stop."
-wait $UVICORN_PID
+wait

@@ -72,6 +72,8 @@ class FindFriendsStrategy(ModeStrategy):
         ctx = state.trump_context
         trump_rank = ctx.trump_rank if ctx is not None else None
 
+        trump_suit = ctx.trump_suit if ctx is not None else None
+
         for decl in declarations:
             card = decl.card
             if card.suit == Suit.JOKER:
@@ -81,6 +83,10 @@ class FindFriendsStrategy(ModeStrategy):
             if trump_rank is not None and card.rank == trump_rank:
                 raise ValueError(
                     f"Cannot declare the trump-rank card ({card}) as a friend card."
+                )
+            if trump_suit is not None and card.suit == trump_suit:
+                raise ValueError(
+                    f"Cannot declare a trump-suit card ({card}) as a friend card."
                 )
 
     def resolve_friend(

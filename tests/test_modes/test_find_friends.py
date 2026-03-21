@@ -136,12 +136,33 @@ class TestValidateFriendDeclaration:
         # Should not raise — this is an intentional edge case
         self.strategy.validate_friend_declaration(state, [_decl(A_S)])
 
+    def test_trump_suit_card_raises(self):
+        # trump_suit=HEARTS (_make_state default), so A♥ is a trump-suit card
+        state = _make_state(trump_suit=Suit.HEARTS)
+        A_H = Card(Suit.HEARTS, Rank.ACE)
+        with pytest.raises(ValueError, match="trump-suit"):
+            self.strategy.validate_friend_declaration(state, [_decl(A_H)])
+
+    def test_trump_suit_card_any_rank_raises(self):
+        # Any rank of trump suit should be rejected (not just trump rank)
+        state = _make_state(trump_rank=Rank.TWO, trump_suit=Suit.HEARTS)
+        K_H = Card(Suit.HEARTS, Rank.KING)
+        with pytest.raises(ValueError, match="trump-suit"):
+            self.strategy.validate_friend_declaration(state, [_decl(K_H)])
+
     def test_no_trump_context_skips_trump_rank_check(self):
-        """If trump_context is None, the trump-rank restriction is skipped."""
+        """If trump_context is None, the trump-rank and trump-suit restrictions are skipped."""
         state = _make_state()
         state.trump_context = None
         # TWO_S would normally be banned — but no context so no restriction
         self.strategy.validate_friend_declaration(state, [_decl(TWO_S)])
+
+    def test_no_trump_suit_allows_any_suit(self):
+        """No-trump bid (trump_suit=None) — any non-joker non-trump-rank suit is allowed."""
+        state = _make_state(trump_suit=None)
+        A_H = Card(Suit.HEARTS, Rank.ACE)
+        # Should not raise — no trump suit to restrict
+        self.strategy.validate_friend_declaration(state, [_decl(A_H)])
 
 
 # ---------------------------------------------------------------------------

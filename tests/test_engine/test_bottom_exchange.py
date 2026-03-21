@@ -67,7 +67,11 @@ def _make_engine(state: GameState | None = None, find_friends: bool = False) -> 
 
 
 def _deal_and_bid(engine: GameEngine, bidder_id: str = "p0") -> None:
-    """Deal all cards and simulate a bid so we reach BOTTOM_EXCHANGE."""
+    """Deal all cards and simulate a bid.
+
+    For Upgrade mode: state is BOTTOM_EXCHANGE after this call.
+    For Find Friends mode: state is FRIEND_DECLARATION after this call.
+    """
     engine.start_dealing()
     while engine.state.draw_pile:
         engine.deal_next_card()
@@ -79,7 +83,6 @@ def _deal_and_bid(engine: GameEngine, bidder_id: str = "p0") -> None:
         bidder.hand[0] = trump_card  # replace, not insert
     engine.place_bid(bidder_id, [trump_card])
     engine.close_bidding()
-    # state is now BOTTOM_EXCHANGE, bottom_deck has 8 cards
 
 
 # ---------------------------------------------------------------------------
@@ -180,18 +183,23 @@ class TestExchangeBottomLogic:
 
 
 # ---------------------------------------------------------------------------
-# exchange_bottom — Find Friends transitions to FRIEND_DECLARATION
+# exchange_bottom — Find Friends transitions to PLAYING (declaration already done)
 # ---------------------------------------------------------------------------
 
 class TestExchangeBottomFindFriends:
     def setup_method(self):
         self.engine = _make_engine(find_friends=True)
         _deal_and_bid(self.engine)
+        # In Find Friends mode, close_bidding() lands on FRIEND_DECLARATION.
+        # Declare before exchange (correct new order).
+        decl = FriendDeclaration(card=Card(suit=Suit.SPADES, rank=Rank.ACE), ordinal=1)
+        self.engine.declare_friends("p0", [decl])
+        # Now in BOTTOM_EXCHANGE
 
-    def test_find_friends_transitions_to_friend_declaration(self):
+    def test_find_friends_transitions_to_playing(self):
         put_back = list(self.engine.state.bottom_deck)
         self.engine.exchange_bottom("p0", put_back)
-        assert self.engine.state.phase == GamePhase.FRIEND_DECLARATION
+        assert self.engine.state.phase == GamePhase.PLAYING
 
 
 # ---------------------------------------------------------------------------
@@ -202,9 +210,7 @@ class TestDeclareFriends:
     def setup_method(self):
         self.engine = _make_engine(find_friends=True)
         _deal_and_bid(self.engine)
-        put_back = list(self.engine.state.bottom_deck)
-        self.engine.exchange_bottom("p0", put_back)
-        # Now in FRIEND_DECLARATION
+        # In Find Friends mode, close_bidding() lands on FRIEND_DECLARATION directly.
 
     def _decl(self) -> FriendDeclaration:
         return FriendDeclaration(
@@ -226,9 +232,9 @@ class TestDeclareFriends:
         self.engine.declare_friends("p0", [decl])
         assert self.engine.state.friend_declarations == [decl]
 
-    def test_transitions_to_playing(self):
+    def test_transitions_to_bottom_exchange(self):
         self.engine.declare_friends("p0", [self._decl()])
-        assert self.engine.state.phase == GamePhase.PLAYING
+        assert self.engine.state.phase == GamePhase.BOTTOM_EXCHANGE
 
     def test_strategy_validation_called(self):
         """Empty declarations rejected by the stub strategy."""

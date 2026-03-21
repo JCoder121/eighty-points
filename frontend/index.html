@@ -551,6 +551,27 @@
     #btn-rank-display.active { border-color: #aaaaff; color: #aaaaff; background: #1a1a3a; }
 
     /* ------------------------------------------------------------------ */
+    /* Friend reveal popup                                                 */
+    /* ------------------------------------------------------------------ */
+    .friend-reveal-popup {
+      font-size: 11px;
+      color: #88ff88;
+      background: rgba(34, 85, 34, 0.92);
+      border: 1px solid #44aa44;
+      border-radius: 4px;
+      padding: 2px 8px;
+      text-align: center;
+      margin-top: 3px;
+      white-space: nowrap;
+      animation: friend-fade 4s forwards;
+    }
+    @keyframes friend-fade {
+      0%   { opacity: 1; }
+      60%  { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    /* ------------------------------------------------------------------ */
     /* Miscellaneous                                                        */
     /* ------------------------------------------------------------------ */
     .dealer-tag {

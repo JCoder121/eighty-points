@@ -386,10 +386,16 @@ class GameEngine:
         state.round_leader_id = winning_bid.player_id
         state.current_leader_id = winning_bid.player_id
         state.trump_context = winning_bid.resulting_trump
-        state.transition_to(GamePhase.BOTTOM_EXCHANGE)
 
         # Assign teams now that the round leader (bid winner) is known.
         self.mode.assign_teams(state)
+
+        # Find Friends: declare friend before seeing the bottom deck.
+        # Upgrade: go straight to bottom exchange.
+        if self.mode.needs_friend_declaration():
+            state.transition_to(GamePhase.FRIEND_DECLARATION)
+        else:
+            state.transition_to(GamePhase.BOTTOM_EXCHANGE)
 
     # ------------------------------------------------------------------
     # Bottom exchange
@@ -459,12 +465,9 @@ class GameEngine:
             f"got {len(leader.hand)}"
         )
 
-        # Step 4: Phase transition
-        if self.mode.needs_friend_declaration():
-            state.transition_to(GamePhase.FRIEND_DECLARATION)
-        else:
-            state.transition_to(GamePhase.PLAYING)
-            state.current_turn_id = state.round_leader_id
+        # Step 4: Phase transition (friend declaration already done before exchange)
+        state.transition_to(GamePhase.PLAYING)
+        state.current_turn_id = state.round_leader_id
 
     # ------------------------------------------------------------------
     # Friend declaration
@@ -504,8 +507,7 @@ class GameEngine:
 
         self.mode.validate_friend_declaration(state, declarations)
         state.friend_declarations = list(declarations)
-        state.transition_to(GamePhase.PLAYING)
-        state.current_turn_id = state.round_leader_id
+        state.transition_to(GamePhase.BOTTOM_EXCHANGE)
 
     # ------------------------------------------------------------------
     # Playing tricks

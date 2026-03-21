@@ -563,13 +563,11 @@ function renderFriendStatus(gs) {
     const name   = friend ? friend.name : decl.resolved_player_id;
     el.textContent = `${name} is the friend!`;
     el.classList.remove("hidden");
-    el.classList.add("resolved");
   } else {
     const leader = gs.players.find(p => p.id === gs.round_leader_id);
     const name   = leader ? leader.name : gs.round_leader_id;
     el.textContent = `${name} is looking for ${card.rank}${sym}`;
     el.classList.remove("hidden");
-    el.classList.remove("resolved");
   }
 }
 

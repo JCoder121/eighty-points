@@ -4,6 +4,16 @@ Newest entries at the top.
 
 ---
 
+## Session 15 — Issue triage, branch rebase
+
+**Date:** 2026-03-20
+
+- Raised issue #24: player who passed can re-bid, stalling game loop
+- Raised issue #25: AKK/AAK throw follow validation leaves follower with no legal moves
+- Rebased `fix/trump-bugs-19-20` onto `main` (PR #11 had landed); resolved false conflict in `frontend/app.js` and `frontend/index.html` — `cc98d00` (remove defending pts) became a no-op and was dropped. Force-pushed.
+
+---
+
 ## Session 14 — Features: Ready Button, Rank Sticky-Note, FF Compatibility
 
 **Status:** Complete. 516 tests passing.

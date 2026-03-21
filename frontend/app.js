@@ -1177,6 +1177,7 @@ function renderFriendDeclaration(area, gs) {
 
   const ctx       = gs.trump_context;
   const trumpRank = ctx ? ctx.trump_rank : null;
+  const trumpSuit = ctx ? ctx.trump_suit : null;
 
   const info = document.createElement("div");
   info.style.cssText = "font-size:13px;color:#aaa;text-align:center;margin-bottom:4px;";
@@ -1204,7 +1205,7 @@ function renderFriendDeclaration(area, gs) {
     rankSel.appendChild(opt);
   }
 
-  // Suit dropdown — empty default, no joker (backend validates trump-suit rule)
+  // Suit dropdown — empty default, no joker, no trump suit
   const suitSel = document.createElement("select");
   suitSel.id = "fd-suit";
   const blankOpt = document.createElement("option");
@@ -1213,6 +1214,7 @@ function renderFriendDeclaration(area, gs) {
   suitSel.appendChild(blankOpt);
   for (const [suit, sym] of Object.entries(SUIT_SYMBOL)) {
     if (suit === "joker") continue;
+    if (suit === trumpSuit) continue;
     const opt = document.createElement("option");
     opt.value = suit;
     opt.textContent = `${sym} ${suit.charAt(0).toUpperCase() + suit.slice(1)}`;

@@ -1177,7 +1177,6 @@ function renderFriendDeclaration(area, gs) {
 
   const ctx       = gs.trump_context;
   const trumpRank = ctx ? ctx.trump_rank : null;
-  const trumpSuit = ctx ? ctx.trump_suit : null;
 
   const info = document.createElement("div");
   info.style.cssText = "font-size:13px;color:#aaa;text-align:center;margin-bottom:4px;";
@@ -1194,14 +1193,18 @@ function renderFriendDeclaration(area, gs) {
     ordSel.appendChild(opt);
   }
 
-  // Rank text input
-  const rankInput = document.createElement("input");
-  rankInput.type = "text";
-  rankInput.id = "fd-rank";
-  rankInput.placeholder = "e.g. A";
-  rankInput.style.cssText = "width:48px;text-align:center;";
+  // Rank dropdown — exclude trump rank and jokers
+  const rankSel = document.createElement("select");
+  rankSel.id = "fd-rank";
+  for (const r of RANK_ORDER) {
+    if (r === trumpRank) continue;
+    const opt = document.createElement("option");
+    opt.value = r;
+    opt.textContent = rankDisplay(r);
+    rankSel.appendChild(opt);
+  }
 
-  // Suit dropdown — empty default, no joker, no trump suit
+  // Suit dropdown — empty default, no joker (backend validates trump-suit rule)
   const suitSel = document.createElement("select");
   suitSel.id = "fd-suit";
   const blankOpt = document.createElement("option");
@@ -1210,7 +1213,6 @@ function renderFriendDeclaration(area, gs) {
   suitSel.appendChild(blankOpt);
   for (const [suit, sym] of Object.entries(SUIT_SYMBOL)) {
     if (suit === "joker") continue;
-    if (suit === trumpSuit) continue;
     const opt = document.createElement("option");
     opt.value = suit;
     opt.textContent = `${sym} ${suit.charAt(0).toUpperCase() + suit.slice(1)}`;
@@ -1227,14 +1229,14 @@ function renderFriendDeclaration(area, gs) {
   const row = document.createElement("div");
   row.className = "friend-decl-row";
   row.appendChild(ordSel);
-  row.appendChild(rankInput);
+  row.appendChild(rankSel);
   row.appendChild(lbl("of"));
   row.appendChild(suitSel);
 
   const confirmBtn = document.createElement("button");
   confirmBtn.textContent = "Confirm";
   confirmBtn.addEventListener("click", () => {
-    const rank    = document.getElementById("fd-rank").value.trim();
+    const rank    = document.getElementById("fd-rank").value;
     const suit    = document.getElementById("fd-suit").value;
     const ordinal = parseInt(document.getElementById("fd-ordinal").value, 10);
     if (!suit) {

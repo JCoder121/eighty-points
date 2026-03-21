@@ -20,6 +20,7 @@ from shengji.models.player import Player
 if TYPE_CHECKING:
     from fastapi import WebSocket
     from shengji.engine.engine import GameEngine
+    from shengji.engine.logger import GameLogger
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,7 @@ class Room:
     game_master_id: str
     game_state: GameState
     engine: "GameEngine | None" = None
+    logger: "GameLogger | None" = None
     connections: dict[str, "WebSocket"] = field(default_factory=dict)
     superuser_enabled: bool = False
     passed_in_bidding: set[str] = field(default_factory=set)

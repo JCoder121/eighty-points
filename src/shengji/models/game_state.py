@@ -17,13 +17,13 @@ class GamePhase(str, Enum):
     Allowed transitions (enforced by transition_to()):
       WAITING → DEALING
       DEALING → BIDDING_AFTER_DEAL
-      BIDDING_AFTER_DEAL → BOTTOM_EXCHANGE
-      BOTTOM_EXCHANGE → FRIEND_DECLARATION  (Find Friends mode)
-      BOTTOM_EXCHANGE → PLAYING             (Upgrade mode)
-      FRIEND_DECLARATION → PLAYING
+      BIDDING_AFTER_DEAL → FRIEND_DECLARATION  (Find Friends mode)
+      BIDDING_AFTER_DEAL → BOTTOM_EXCHANGE     (Upgrade mode)
+      FRIEND_DECLARATION → BOTTOM_EXCHANGE
+      BOTTOM_EXCHANGE → PLAYING
       PLAYING → SCORING
       SCORING → ROUND_OVER
-      ROUND_OVER → DEALING                  (next round)
+      ROUND_OVER → DEALING                     (next round)
       ROUND_OVER → GAME_OVER
     """
 
@@ -41,9 +41,9 @@ class GamePhase(str, Enum):
 _VALID_TRANSITIONS: dict[GamePhase, set[GamePhase]] = {
     GamePhase.WAITING: {GamePhase.DEALING},
     GamePhase.DEALING: {GamePhase.BIDDING_AFTER_DEAL},
-    GamePhase.BIDDING_AFTER_DEAL: {GamePhase.BOTTOM_EXCHANGE, GamePhase.DEALING},  # re-deal on no bid
-    GamePhase.BOTTOM_EXCHANGE: {GamePhase.FRIEND_DECLARATION, GamePhase.PLAYING},
-    GamePhase.FRIEND_DECLARATION: {GamePhase.PLAYING},
+    GamePhase.BIDDING_AFTER_DEAL: {GamePhase.FRIEND_DECLARATION, GamePhase.BOTTOM_EXCHANGE, GamePhase.DEALING},  # re-deal on no bid
+    GamePhase.FRIEND_DECLARATION: {GamePhase.BOTTOM_EXCHANGE},
+    GamePhase.BOTTOM_EXCHANGE: {GamePhase.PLAYING},
     GamePhase.PLAYING: {GamePhase.SCORING},
     GamePhase.SCORING: {GamePhase.ROUND_OVER},
     GamePhase.ROUND_OVER: {GamePhase.DEALING, GamePhase.GAME_OVER},
@@ -145,6 +145,9 @@ class GameState:
                 [c.to_json() for c in self.bottom_deck] if show_bottom else None
             ),
             "cards_dealt_count": self.cards_dealt_count,
+            "revealed_friends": list(self.revealed_friends),
+            "round_leader_id": self.round_leader_id,
+            "friend_declarations": [fd.to_json() for fd in self.friend_declarations],
         }
 
     def to_superuser_view(self) -> dict:

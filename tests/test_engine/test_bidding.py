@@ -32,6 +32,9 @@ class _StubStrategy:
     def assign_teams(self, state) -> None:
         pass
 
+    def needs_friend_declaration(self) -> bool:
+        return False
+
 
 def _make_engine(state: GameState | None = None) -> GameEngine:
     if state is None:

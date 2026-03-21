@@ -53,18 +53,18 @@ class TestPhaseTransitions:
         state.transition_to(GamePhase.DEALING)
         assert state.phase == GamePhase.DEALING
 
-    def test_bottom_exchange_to_friend_declaration(self):
-        state = GameState(phase=GamePhase.BOTTOM_EXCHANGE)
+    def test_bidding_after_deal_to_friend_declaration(self):
+        state = GameState(phase=GamePhase.BIDDING_AFTER_DEAL)
         state.transition_to(GamePhase.FRIEND_DECLARATION)
         assert state.phase == GamePhase.FRIEND_DECLARATION
 
+    def test_friend_declaration_to_bottom_exchange(self):
+        state = GameState(phase=GamePhase.FRIEND_DECLARATION)
+        state.transition_to(GamePhase.BOTTOM_EXCHANGE)
+        assert state.phase == GamePhase.BOTTOM_EXCHANGE
+
     def test_bottom_exchange_to_playing(self):
         state = GameState(phase=GamePhase.BOTTOM_EXCHANGE)
-        state.transition_to(GamePhase.PLAYING)
-        assert state.phase == GamePhase.PLAYING
-
-    def test_friend_declaration_to_playing(self):
-        state = GameState(phase=GamePhase.FRIEND_DECLARATION)
         state.transition_to(GamePhase.PLAYING)
         assert state.phase == GamePhase.PLAYING
 

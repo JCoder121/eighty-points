@@ -8,11 +8,12 @@
 ## Where we are
 
 - **All milestones (M0–M8) are complete.** The game is playable end-to-end in the browser.
-- **531 tests passing** (pytest).
+- **534 tests passing** (pytest).
 - **Current branch:** `main`
 - **No automated frontend tests yet.** All frontend testing is manual.
 - **Mobile layout:** Basic responsive support added — horizontal scroll hand on portrait mobile (≤600px), larger tap targets.
 - **Active work:** Bug fixes and polish discovered through manual play-testing.
+- **Find Friends mode** is fully implemented: correct phase ordering (declare before exchange), trump-suit/rank/joker restrictions, permanent friend status bar, friend reveal popups.
 
 ## What's built
 

@@ -57,6 +57,11 @@ const S = {
 
   // Rank display sticky-note (client-only toggle).
   showRankDisplay: false,
+
+  // Friend reveal tracking (Find Friends mode).
+  // Reset each round; used to detect newly revealed friends.
+  knownFriends:   new Set(),
+  lastRoundNumber: null,
 };
 
 // Timer for auto-dismiss round-over overlay
@@ -531,10 +536,76 @@ function modeName(mode) {
 function renderGame(gs) {
   renderRoundInfo(gs);
   renderTrickArea(gs);
+  checkFriendReveals(gs);
+  renderFriendStatus(gs);
   renderPoints(gs);
   renderHand(gs);
   renderActionArea(gs);
   renderRankDisplay(gs);
+}
+
+// ── Friend declaration status bar ─────────────────────────────────────────
+
+function renderFriendStatus(gs) {
+  const el = document.getElementById("friend-status");
+  const decls = gs.friend_declarations;
+  if (gs.mode !== "find_friends" || !decls || decls.length === 0) {
+    el.classList.add("hidden");
+    return;
+  }
+
+  const decl = decls[0];
+  const card = decl.card;
+  const sym  = SUIT_SYMBOL[card.suit] || card.suit;
+
+  if (decl.resolved_player_id) {
+    const friend = gs.players.find(p => p.id === decl.resolved_player_id);
+    const name   = friend ? friend.name : decl.resolved_player_id;
+    el.textContent = `${name} is the friend!`;
+    el.classList.remove("hidden");
+  } else {
+    const leader = gs.players.find(p => p.id === gs.round_leader_id);
+    const name   = leader ? leader.name : gs.round_leader_id;
+    el.textContent = `${name} is looking for ${card.rank}${sym}`;
+    el.classList.remove("hidden");
+  }
+}
+
+// ── Friend reveal popups ──────────────────────────────────────────────────
+
+function checkFriendReveals(gs) {
+  if (gs.mode !== "find_friends") return;
+
+  // Reset known friends at the start of each new round.
+  if (gs.round_number !== S.lastRoundNumber) {
+    S.knownFriends.clear();
+    S.lastRoundNumber = gs.round_number;
+  }
+
+  const revealed = gs.revealed_friends || [];
+  for (const pid of revealed) {
+    if (S.knownFriends.has(pid)) continue;
+    S.knownFriends.add(pid);
+
+    const player = gs.players.find(p => p.id === pid);
+    if (!player) continue;
+
+    // Find which position (top/left/right/bottom) this player occupies.
+    const myIdx = gs.players.findIndex(p => p.id === S.playerId);
+    const playerIdx = gs.players.findIndex(p => p.id === pid);
+    const posMap = { top: (myIdx + 2) % 4, left: (myIdx + 1) % 4, right: (myIdx + 3) % 4, bottom: myIdx };
+    const posName = Object.keys(posMap).find(k => posMap[k] === playerIdx);
+    if (!posName) continue;
+
+    const posDiv = document.getElementById(`pos-${posName}`);
+    if (!posDiv) continue;
+
+    const popup = document.createElement("div");
+    popup.className = "friend-reveal-popup";
+    popup.textContent = `${player.name} is the friend!`;
+    posDiv.appendChild(popup);
+    setTimeout(() => popup.remove(), 4000);
+  }
 }
 
 // ── Rank sticky-note ──────────────────────────────────────────────────────
@@ -1134,11 +1205,22 @@ function renderFriendDeclaration(area, gs) {
 
   const ctx       = gs.trump_context;
   const trumpRank = ctx ? ctx.trump_rank : null;
+  const trumpSuit = ctx ? ctx.trump_suit : null;
 
   const info = document.createElement("div");
   info.style.cssText = "font-size:13px;color:#aaa;text-align:center;margin-bottom:4px;";
   info.textContent = "Declare your friend (Find Friends mode):";
   area.appendChild(info);
+
+  // Ordinal dropdown — 1st (default) or 2nd
+  const ordSel = document.createElement("select");
+  ordSel.id = "fd-ordinal";
+  for (const [val, label] of [[1, "1st"], [2, "2nd"]]) {
+    const opt = document.createElement("option");
+    opt.value = val;
+    opt.textContent = label;
+    ordSel.appendChild(opt);
+  }
 
   // Rank dropdown — exclude trump rank and jokers
   const rankSel = document.createElement("select");
@@ -1151,59 +1233,54 @@ function renderFriendDeclaration(area, gs) {
     rankSel.appendChild(opt);
   }
 
-  // Suit dropdown — no joker
+  // Suit dropdown — empty default, no joker, no trump suit
   const suitSel = document.createElement("select");
   suitSel.id = "fd-suit";
+  const blankOpt = document.createElement("option");
+  blankOpt.value = "";
+  blankOpt.textContent = "— suit —";
+  suitSel.appendChild(blankOpt);
   for (const [suit, sym] of Object.entries(SUIT_SYMBOL)) {
     if (suit === "joker") continue;
+    if (suit === trumpSuit) continue;
     const opt = document.createElement("option");
     opt.value = suit;
     opt.textContent = `${sym} ${suit.charAt(0).toUpperCase() + suit.slice(1)}`;
     suitSel.appendChild(opt);
   }
 
-  // Ordinal dropdown
-  const ordSel = document.createElement("select");
-  ordSel.id = "fd-ordinal";
-  for (const [val, label] of [[1, "1st person"], [2, "2nd person"]]) {
-    const opt = document.createElement("option");
-    opt.value = val;
-    opt.textContent = `${label} to play this card`;
-    ordSel.appendChild(opt);
-  }
-
   function lbl(text) {
     const l = document.createElement("label");
+    l.style.margin = "0 4px";
     l.textContent = text;
     return l;
   }
 
   const row = document.createElement("div");
   row.className = "friend-decl-row";
-  row.appendChild(lbl("Rank:"));
-  row.appendChild(rankSel);
-  row.appendChild(lbl("Suit:"));
-  row.appendChild(suitSel);
-  row.appendChild(lbl("Ordinal:"));
   row.appendChild(ordSel);
+  row.appendChild(rankSel);
+  row.appendChild(lbl("of"));
+  row.appendChild(suitSel);
 
-  const row2 = document.createElement("div");
-  row2.className = "friend-decl-row";
-  const declBtn = document.createElement("button");
-  declBtn.textContent = "Declare Friend";
-  declBtn.addEventListener("click", () => {
+  const confirmBtn = document.createElement("button");
+  confirmBtn.textContent = "Confirm";
+  confirmBtn.addEventListener("click", () => {
     const rank    = document.getElementById("fd-rank").value;
     const suit    = document.getElementById("fd-suit").value;
     const ordinal = parseInt(document.getElementById("fd-ordinal").value, 10);
+    if (!suit) {
+      setGameError("Please select a suit.");
+      return;
+    }
     sendWS({
       action: "declare_friends",
       declarations: [{ card: { suit, rank }, ordinal }],
     });
   });
-  row2.appendChild(declBtn);
+  row.appendChild(confirmBtn);
 
   area.appendChild(row);
-  area.appendChild(row2);
 }
 
 // ── Play area ─────────────────────────────────────────────────────────────

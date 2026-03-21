@@ -283,6 +283,104 @@ class TestResolveTrickWinnerDegraded:
 
 
 # ---------------------------------------------------------------------------
+# resolve_trick_winner — degraded follow cannot win (tractor lead rule)
+# ---------------------------------------------------------------------------
+
+# Extra trump-suit cards for tractor tests (two decks — duplicate ranks legal).
+# Using the same Card instance twice is fine: Card is a value type and
+# classify_play groups by card_order, not object identity.
+_J_H = _c(Suit.HEARTS, Rank.JACK)
+
+
+class TestResolveTrickWinnerDegradedTractor:
+    """Tractor leads: degraded followers (no matching tractor) cannot win.
+
+    Only a play that itself classifies as a Tractor of sufficient multiplicity
+    and length is eligible to beat a tractor lead.  Plays of singles, pairs,
+    or non-adjacent pairs (Throw) are all ineligible regardless of card strength.
+
+    Tractor adjacency reminder (trump_rank=2, trump_suit=HEARTS):
+      Within spades/diamonds (tier 0): rank positions are 3→A (pos 0→11).
+      A♠ (pos 11) and K♠ (pos 10) are adjacent → A♠A♠K♠K♠ IS a tractor.
+      A♠ (pos 11) and 10♠ (pos 7) are NOT adjacent (J,Q,K between them).
+      Within trump suit (tier 1): same consecutive-rank rule.
+      K♥ (pos 10) and A♥ (pos 11) are adjacent → A♥A♥K♥K♥ IS a tractor.
+      Q♥ (pos 9) and J♥ (pos 8) are adjacent → Q♥Q♥J♥J♥ IS a tractor.
+    """
+    ctx = _ctx()  # trump_rank=2, trump_suit=HEARTS
+
+    def test_degraded_trump_singles_cannot_beat_trump_tractor(self):
+        """Four trump singles following a trump tractor lead — leader wins."""
+        trick = [
+            ("p0", [A_H, A_H, K_H, K_H]),      # leader: A♥A♥K♥K♥ trump tractor
+            ("p1", [Q_H, T_H, TWO_S, TWO_D]),   # follower: 4 trump singles (degraded)
+        ]
+        assert resolve_trick_winner(trick, "trump", self.ctx) == "p0"
+
+    def test_degraded_trump_singles_cannot_beat_trump_tractor_even_if_stronger(self):
+        """Even higher trump singles cannot beat a trump tractor lead."""
+        trick = [
+            ("p0", [Q_H, Q_H, _J_H, _J_H]),  # leader: Q♥Q♥J♥J♥ (weaker tractor)
+            ("p1", [A_H, K_H, TWO_H, SJ]),    # follower: 4 strong trump singles (degraded)
+        ]
+        assert resolve_trick_winner(trick, "trump", self.ctx) == "p0"
+
+    def test_trump_tractor_can_beat_trump_tractor_lead(self):
+        """A stronger trump tractor can beat a weaker trump tractor lead."""
+        trick = [
+            ("p0", [Q_H, Q_H, _J_H, _J_H]),  # leader: Q♥Q♥J♥J♥
+            ("p1", [A_H, A_H, K_H, K_H]),     # follower: A♥A♥K♥K♥ (stronger) — wins
+        ]
+        assert resolve_trick_winner(trick, "trump", self.ctx) == "p1"
+
+    def test_degraded_singles_cannot_beat_non_trump_tractor(self):
+        """Four spade singles following a spade tractor — leader wins."""
+        trick = [
+            ("p0", [Q_S, Q_S, J_S, J_S]),    # leader: Q♠Q♠J♠J♠ spade tractor
+            ("p1", [A_S, K_S, T_S, N_S]),    # follower: 4 spade singles (all singletons → degraded)
+        ]
+        assert resolve_trick_winner(trick, "spades", self.ctx) == "p0"
+
+    def test_trump_tractor_beats_non_trump_tractor_lead(self):
+        """Trump tractor following a non-trump tractor lead — trump tractor wins."""
+        trick = [
+            ("p0", [Q_S, Q_S, J_S, J_S]),    # leader: spade tractor
+            ("p1", [A_H, A_H, K_H, K_H]),    # follower: trump tractor — wins
+        ]
+        assert resolve_trick_winner(trick, "spades", self.ctx) == "p1"
+
+    def test_non_adjacent_pairs_cannot_beat_tractor_lead(self):
+        """Two non-adjacent pairs (Throw, not a Tractor) cannot beat a tractor lead."""
+        # A♠A♠10♠10♠: pairs at positions 11 and 7 — NOT adjacent (J,Q,K between).
+        # classify_play returns Throw([Pair, Pair]), which is ineligible.
+        trick = [
+            ("p0", [Q_S, Q_S, J_S, J_S]),    # leader: Q♠Q♠J♠J♠ spade tractor
+            ("p1", [A_S, A_S, T_S, T_S]),    # follower: A♠A♠10♠10♠ (non-adjacent pairs — Throw)
+        ]
+        assert resolve_trick_winner(trick, "spades", self.ctx) == "p0"
+
+    def test_four_player_tractor_trick_all_degraded_leader_wins(self):
+        """Four-player trick: all followers degrade — leader's tractor wins."""
+        trick = [
+            ("p0", [Q_S, Q_S, J_S, J_S]),                    # leader: Q♠Q♠J♠J♠ tractor
+            ("p1", [A_S, K_S, T_S, N_S]),                    # 4 spade singles (degraded)
+            ("p2", [A_S, K_S, T_S, N_S]),                    # 4 spade singles (degraded)
+            ("p3", [A_D, K_D, A_D, K_D]),                    # off-suit fill
+        ]
+        assert resolve_trick_winner(trick, "spades", self.ctx) == "p0"
+
+    def test_four_player_tractor_trick_trump_tractor_wins(self):
+        """Four-player trick: one follower plays a trump tractor — that player wins."""
+        trick = [
+            ("p0", [Q_S, Q_S, J_S, J_S]),    # leader: spade tractor
+            ("p1", [A_S, K_S, T_S, N_S]),    # degraded spade singles
+            ("p2", [A_H, A_H, K_H, K_H]),    # trump tractor — wins
+            ("p3", [A_S, K_S, T_S, N_S]),    # degraded spade singles
+        ]
+        assert resolve_trick_winner(trick, "spades", self.ctx) == "p2"
+
+
+# ---------------------------------------------------------------------------
 # validate_throw
 # ---------------------------------------------------------------------------
 

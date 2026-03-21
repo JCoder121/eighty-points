@@ -4,6 +4,30 @@ Newest entries at the top.
 
 ---
 
+## Session 20 — Find Friends phase ordering, UI, and friend reveal (#23)
+
+**Date:** 2026-03-21
+
+**Branch:** `feature/find-friends-phase-23` → merged to main. 534 tests passing.
+
+### What was changed
+
+- **Phase ordering fix:** `FRIEND_DECLARATION` now occurs *before* `BOTTOM_EXCHANGE` (correct rule: declare friend card before seeing the 8 global cards). New flow: `BIDDING_AFTER_DEAL → FRIEND_DECLARATION → BOTTOM_EXCHANGE → PLAYING` (Find Friends); Upgrade mode unchanged.
+- **Trump-suit validation:** Backend rejects friend declarations for any card of the trump suit (jokers and trump-rank cards were already blocked). Frontend suit dropdown also hides the trump suit.
+- **Declaration UI:** Controls reordered to `[1st/2nd ▾] [rank ▾] of [suit ▾] [Confirm]`; suit defaults to blank and is validated on confirm.
+- **Friend status bar:** Permanent green bar visible to all players — shows `"{leader} is looking for {rank}{suit}"` after declaration, replaced by `"{friend} is the friend!"` once the card is played.
+- **Friend reveal popup:** Temporary 4-second flash `"{name} is the friend!"` injected near the player's position in the trick area when the friend card is played.
+- **Player view:** Added `revealed_friends`, `round_leader_id`, and `friend_declarations` to `to_player_view()`.
+- **Tests:** Updated `test_game_state.py`, `test_bottom_exchange.py`, `test_bidding.py` for new phase ordering; added 3 new trump-suit validation tests (534 total).
+
+### Design decisions
+
+- Friend declaration comes before bottom exchange so the leader cannot use knowledge of the 8 buried cards to game their friend choice.
+- Trump-suit filtering is frontend-only (UX); backend is the authoritative validator.
+- Status bar uses green for both pre- and post-reveal states for accessibility.
+
+---
+
 ## Session 19 — Mobile responsive layout (explore/mobile-responsive)
 
 **Date:** 2026-03-21

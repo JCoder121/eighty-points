@@ -712,6 +712,9 @@ class GameEngine:
         # Compute advancement
         winner, steps = compute_rank_advancement(attacking_pts)
 
+        # Capture pre-advance ranks before modifying anything
+        pre_advance_ranks = {p.id: p.rank.value for p in state.players}
+
         # Advance winning team's ranks
         winning_ids = attacker_ids if winner == "attacking" else defender_ids
         for pid in winning_ids:
@@ -722,6 +725,7 @@ class GameEngine:
             {
                 "id": p.id,
                 "name": p.name,
+                "old_rank": pre_advance_ranks[p.id],
                 "rank": p.rank.value,
                 "is_defending": p.is_defending,
             }

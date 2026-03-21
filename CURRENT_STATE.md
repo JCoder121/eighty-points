@@ -11,6 +11,7 @@
 - **531 tests passing** (pytest).
 - **Current branch:** `main`
 - **No automated frontend tests yet.** All frontend testing is manual.
+- **Mobile layout:** Basic responsive support added — horizontal scroll hand on portrait mobile (≤600px), larger tap targets.
 - **Active work:** Bug fixes and polish discovered through manual play-testing.
 
 ## What's built

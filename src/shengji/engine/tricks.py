@@ -296,9 +296,66 @@ def is_valid_follow(
             prop_groups[ctx.card_order(c)].append(c)
         return any(len(v) >= k for v in prop_groups.values())
 
-    # Tractor / Throw — complex ordering rules; fall back to get_legal_plays
+    if isinstance(led_format, Tractor):
+        return _is_valid_tractor_follow(suited_in_proposed, suited_in_hand, led_format, ctx)
+
+    # Throw — complex; fall back to get_legal_plays
     legal = get_legal_plays(hand, led_format, led_suit, ctx)
     return any(_multiset_eq(proposed, opt) for opt in legal)
+
+
+def _is_valid_tractor_follow(
+    proposed_suited: list[Card],
+    hand_suited: list[Card],
+    led: Tractor,
+    ctx: TrumpContext,
+) -> bool:
+    """Validate a tractor follow.
+
+    The player must include all required (tractor + pair) cards from their
+    suited hand; any remaining slots may be filled with any suited singles.
+
+    Steps:
+      1. Greedily claim tractor cards from the hand (largest tractor first).
+      2. Greedily claim pairs from what remains.
+      3. Verify the proposed play contains all claimed required cards.
+      4. Any leftover proposed cards (the singles) are accepted freely.
+    """
+    needed = led.multiplicity * led.length
+    remaining = list(hand_suited)
+    required: list[Card] = []
+
+    # Step 1: tractor cards
+    for t in sorted(find_tractors(remaining, ctx), key=len, reverse=True):
+        if len(required) >= needed:
+            break
+        take = min(len(t), needed - len(required))
+        required.extend(t[:take])
+        for c in t[:take]:
+            remaining.remove(c)
+
+    # Step 2: pairs from what's left
+    if len(required) < needed:
+        by_pos: dict[tuple, list[Card]] = defaultdict(list)
+        for c in remaining:
+            by_pos[ctx.card_order(c)].append(c)
+        for pos in sorted(by_pos.keys(), reverse=True):
+            if len(required) >= needed:
+                break
+            group = by_pos[pos]
+            if len(group) >= 2:
+                take = min(len(group), needed - len(required))
+                required.extend(group[:take])
+
+    # Step 3: proposed must contain every required card
+    proposed_copy = list(proposed_suited)
+    for req_card in required:
+        if req_card not in proposed_copy:
+            return False
+        proposed_copy.remove(req_card)
+
+    # Step 4: remaining proposed cards are free-choice singles — always valid
+    return True
 
 
 # ---------------------------------------------------------------------------

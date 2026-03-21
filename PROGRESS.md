@@ -4,6 +4,42 @@ Newest entries at the top.
 
 ---
 
+## Session 18 — Feature #21: per-game JSONL event logger
+
+**Date:** 2026-03-20
+
+**Branch:** `feature/game-logging-21` → PR #28. 531 tests passing.
+
+### What was added
+
+`GameLogger` class (`src/shengji/engine/logger.py`) writes one crash-safe JSONL file per game to `logs/games/{unix_timestamp}.jsonl`. The file is flushed after every write so a mid-game server kill leaves a readable log up to the last event. All writes are best-effort — a filesystem error never crashes the game.
+
+### Events logged
+
+| Event | When |
+|-------|------|
+| `round_start` | After dealing — full hands snapshot for all 4 players, bottom deck, teams |
+| `bid` / `pass_bid` | Each bid or pass during bidding phase |
+| `bidding_closed` | When bidding closes; includes trump context, team assignments, or redeal flag |
+| `bottom_exchange` | 8 cards buried by round leader |
+| `friend_declarations` | Find Friends only: declared card + ordinal |
+| `play_cards` | Each card play: trick_number, trick_position (0=lead, 1–3=follow) |
+| `friend_revealed` | Find Friends only: auto-detected via `revealed_friends` set diff — no-op in upgrade mode |
+| `trick_complete` | All 4 plays in order, trick points, running attacking_points |
+| `round_end` | attacking_points, winner, steps, post-advancement player ranks |
+| `game_over` | Final winner and standings |
+| `error` | Engine validation failures (player_id, action, message) |
+
+### Hook points
+
+`handler.py` was modified at 9 points. `Room` gained a `logger` field. Logger is created on first `start_and_deal` call and shared across all rounds of the same game. Closed on game over or room abort.
+
+### Key implementation note
+
+`engine.play_cards()` clears `state.current_trick` after resolving. The trick snapshot is taken *before* the call; the 4th player's cards are appended after to reconstruct the full trick for `trick_complete` logging.
+
+---
+
 ## Session 17 — Fix #24: prevent passed players from re-bidding
 
 **Date:** 2026-03-20

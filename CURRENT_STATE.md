@@ -24,6 +24,7 @@
 | Mode strategies | `modes/upgrade.py`, `modes/find_friends.py` | Complete |
 | Superuser tools | `superuser/inspector.py`, `superuser/mutator.py`, `superuser/api.py` | Complete |
 | Networking & rooms | `network/app.py`, `network/handler.py`, `network/room.py` | Complete |
+| Game logger | `engine/logger.py` | Complete |
 | Frontend | `frontend/index.html`, `frontend/app.js` | Complete (no mobile support) |
 
 ## How to run
@@ -33,6 +34,28 @@ pip install -e ".[dev]"           # install
 pytest                             # run tests
 uvicorn shengji.network.app:app --reload   # start server at localhost:8000
 ```
+
+## Debugging with game logs
+
+**Every game session writes a JSONL log to `logs/games/{unix_timestamp}.jsonl`.**
+When investigating a bug, start here before reading code.
+
+Each line is one JSON event. Key events:
+
+- `round_start` — full snapshot of all 4 hands, bottom deck, teams, and player ranks at the start of each round. **Start here** to reconstruct the game state.
+- `play_cards` + `trick_complete` — every card played and every trick resolved, with running attacking_points.
+- `friend_revealed` — when a friend is identified in Find Friends mode.
+- `round_end` — full scoring breakdown: attacking_points, winner, steps, post-advancement ranks.
+- `error` — any engine validation failure, with the action and player that triggered it.
+
+**Workflow for debugging an issue:**
+1. Reproduce the bug while the server is running to capture a log file.
+2. Find the relevant log in `logs/games/` (latest timestamp).
+3. Read the `round_start` event to get initial hands and trump context.
+4. Trace `play_cards` / `trick_complete` events to find where behavior diverged.
+5. Cross-reference `engine/tricks.py`, `engine/scoring.py`, or `modes/` as needed.
+
+Log files are gitignored (`logs/games/*.jsonl`).
 
 ## Tracking work
 

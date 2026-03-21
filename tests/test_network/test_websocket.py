@@ -352,6 +352,20 @@ class TestBidding:
             msg = ws.receive_json()
             assert msg["type"] == "error"
 
+    def test_passed_player_cannot_bid_again(self):
+        """A player who has passed cannot place a bid — regression for issue #24."""
+        client, _ = _client()
+        room_id, pids = _setup_room(client, n=NUM_PLAYERS)
+        with ExitStack() as stack:
+            wss = _setup_deal(stack, client, room_id, pids)
+            # Player 0 passes
+            wss[0].send_json({"action": "pass_bid"})
+            # Player 0 attempts to bid — should be rejected immediately
+            wss[0].send_json({"action": "bid", "suit": "hearts"})
+            msg = wss[0].receive_json()
+            assert msg["type"] == "error"
+            assert "passed" in msg["message"].lower()
+
 
 # ---------------------------------------------------------------------------
 # Disconnect / abort

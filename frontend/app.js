@@ -1027,8 +1027,8 @@ function renderBidArea(area, gs) {
     const canBid = available.some(b =>
       (b.type === "single" || b.type === "pair") && b.suit === suit
     );
-    btn.disabled = !canBid;
-    if (canBid) {
+    btn.disabled = !canBid || S.hasPassed;
+    if (canBid && !S.hasPassed) {
       const isPair = available.some(b => b.type === "pair" && b.suit === suit);
       btn.title = isPair ? `Bid ${sym} (pair — nails it down)` : `Bid ${sym}`;
       btn.addEventListener("click", () => sendWS({ action: "bid", suit }));
@@ -1039,7 +1039,7 @@ function renderBidArea(area, gs) {
   for (const joker of ["small", "big"]) {
     const btn = document.createElement("button");
     btn.textContent = joker === "small" ? "No Trump (SJ)" : "No Trump (BJ)";
-    btn.disabled    = !available.some(b => b.type === "joker_pair" && b.joker === joker);
+    btn.disabled    = !available.some(b => b.type === "joker_pair" && b.joker === joker) || S.hasPassed;
     if (!btn.disabled) {
       btn.addEventListener("click", () => sendWS({ action: "bid", joker }));
     }

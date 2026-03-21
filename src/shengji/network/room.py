@@ -55,6 +55,10 @@ class Room:
         Set of player_ids that have passed during the current BIDDING_AFTER_DEAL
         window.  Cleared whenever a successful bid is placed (so all must pass
         again to close bidding after the last raise).
+    players_who_passed:
+        Set of player_ids that have passed at any point this bidding round.
+        Never cleared on a new bid — only on a new deal.  Used to permanently
+        block re-bids from players who already passed.
     """
 
     room_id: str
@@ -64,6 +68,7 @@ class Room:
     connections: dict[str, "WebSocket"] = field(default_factory=dict)
     superuser_enabled: bool = False
     passed_in_bidding: set[str] = field(default_factory=set)
+    players_who_passed: set[str] = field(default_factory=set)
     ready_for_next_round: set[str] = field(default_factory=set)
 
 

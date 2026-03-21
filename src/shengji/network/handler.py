@@ -171,6 +171,7 @@ async def start_and_deal(
     )
     room.engine.start_dealing()
     room.passed_in_bidding.clear()
+    room.players_who_passed.clear()
     room.ready_for_next_round.clear()
     await broadcast_game_states(room)
 
@@ -287,6 +288,9 @@ async def handle_message(
             if engine is None:
                 await send_error(room, player_id, "Game has not started yet.")
                 return
+            if player_id in room.players_who_passed:
+                await send_error(room, player_id, "You have already passed and cannot bid again this round.")
+                return
             trump_rank = engine._player(state.round_leader_id).rank
 
             if "suit" in data:
@@ -326,6 +330,7 @@ async def handle_message(
                 await send_error(room, player_id, "You can only pass during BIDDING_AFTER_DEAL.")
                 return
             room.passed_in_bidding.add(player_id)
+            room.players_who_passed.add(player_id)
             if len(room.passed_in_bidding) >= NUM_PLAYERS:
                 engine.close_bidding()
                 room.passed_in_bidding.clear()

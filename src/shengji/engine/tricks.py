@@ -633,7 +633,8 @@ def _format_can_beat_lead(play_fmt: TrickFormat, led_fmt: TrickFormat) -> bool:
     - IdenticalGroup(k) lead: IdenticalGroup(>=k) or any Tractor is eligible.
     - Tractor(m, L) lead:     Tractor with multiplicity >= m and length >= L
                               is eligible; pairs and singles are not.
-    - Throw lead:             eligibility is not restricted (complex case).
+    - Throw lead:             play must match every component (pair for pair,
+                              tractor for tractor, single for single).
     """
     if isinstance(led_fmt, Single):
         return isinstance(play_fmt, Single)
@@ -651,7 +652,38 @@ def _format_can_beat_lead(play_fmt: TrickFormat, led_fmt: TrickFormat) -> bool:
                 and play_fmt.length >= led_fmt.length
             )
         return False  # pairs and singles cannot beat a tractor lead
-    # Throw lead — don't restrict (existing behaviour preserved)
+    # Throw lead — each led component must be matchable by a play component.
+    if isinstance(led_fmt, Throw):
+        if not isinstance(play_fmt, Throw):
+            # Non-throw play: treat as a single component and check against
+            # all led components.  Only works if throw has exactly 1 component.
+            return (
+                len(led_fmt.components) == 1
+                and _format_can_beat_lead(play_fmt, led_fmt.components[0])
+            )
+        # Sort components largest-first so we match greedily.
+        led_comps = sorted(
+            led_fmt.components,
+            key=lambda f: _format_card_count(f),
+            reverse=True,
+        )
+        play_comps = sorted(
+            play_fmt.components,
+            key=lambda f: _format_card_count(f),
+            reverse=True,
+        )
+        # Each led component must be matched by a play component.
+        remaining = list(play_comps)
+        for lc in led_comps:
+            matched = False
+            for i, pc in enumerate(remaining):
+                if _format_can_beat_lead(pc, lc):
+                    remaining.pop(i)
+                    matched = True
+                    break
+            if not matched:
+                return False
+        return True
     return True
 
 

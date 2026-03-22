@@ -4,6 +4,25 @@ Newest entries at the top.
 
 ---
 
+## Session 24 — Display fixes, trick delay, bidding pass, no-trump suit (#39, #40)
+
+**Date:** 2026-03-21
+
+**Branch:** `fix/display-fixes-trick-delay-bidding-notrump`. **PR:** #41. 553 tests passing.
+
+### What was changed
+
+- **Bottom cards at round-over (#40):** always revealed to all players, not just when defenders win. Label changed to "Bottom cards:".
+- **Trick hold delay (#40):** every completed trick now holds for 3s (single/pair) or 5s (>2 cards) before clearing, so all players see the 4th player's cards. Backend restores `current_trick` from snapshot, broadcasts, sleeps, then clears.
+- **Outbid player pass (#39):** frontend Pass button was disabled for any player in the bid history. Fixed to only disable for the current highest bidder. Outbid players can now pass.
+- **No-trump effective_suit fix:** `effective_suit()` in `TrumpContext` returned natural suit for trump-rank cards in no-trump mode, but `card_order()` gave them trump-tier ordering. This caused:
+  - Followers couldn't play single 2s when following a trump lead (2s not recognized as trump-suited)
+  - AKK throws rejected because opponent 2s were counted as suited cards at trump ordering, appearing to beat any non-trump pair
+  - Fixed: trump-rank cards always return `"trump"` from `effective_suit()` regardless of mode.
+- **Throw trick-winning format matching:** `_format_can_beat_lead()` returned True unconditionally for Throw leads, so 3 random trump singles could beat a throw with a pair component. Fixed: follower's play must match the throw's component structure (pair for pair, single for single) to be eligible to win. Follower is still free to play any cards when out of led suit.
+
+---
+
 ## Session 23 — Fix throw follow validation (#25) + scoring step change
 
 **Date:** 2026-03-21

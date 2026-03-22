@@ -552,9 +552,9 @@ class TestTrumpOrdering:
 
     def test_effective_suit_no_trump(self):
         ctx_no_trump = TrumpContext(trump_rank=Rank.TWO, trump_suit=None)
-        # In no-trump mode, trump-rank cards keep their own suit
-        assert ctx_no_trump.effective_suit(TWO_S) == "spades"
-        assert ctx_no_trump.effective_suit(TWO_H) == "hearts"
+        # In no-trump mode, trump-rank cards are still trump.
+        assert ctx_no_trump.effective_suit(TWO_S) == "trump"
+        assert ctx_no_trump.effective_suit(TWO_H) == "trump"
         # Jokers are always trump
         assert ctx_no_trump.effective_suit(SJ) == "trump"
 

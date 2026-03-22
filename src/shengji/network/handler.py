@@ -208,9 +208,8 @@ async def handle_round_end(
         room.logger.log_round_end(result, room.game_state)
 
     # bottom_deck is not modified by end_round — still holds the buried cards.
-    # Only reveal it to everyone when defenders win (attackers didn't meet threshold).
+    # Always reveal bottom cards so all players can review them at round recap.
     winner = result["winner"]
-    reveal_bottom = winner == "defending"
     await broadcast_all(room, {
         "type": "round_over",
         "attacking_points": result["attacking_points"],
@@ -218,10 +217,7 @@ async def handle_round_end(
         "steps": result["steps"],
         "game_over": result["game_over"],
         "players": result.get("round_players", []),   # team/rank snapshot this round
-        "bottom_deck": (
-            [c.to_json() for c in room.game_state.bottom_deck]
-            if reveal_bottom else None
-        ),
+        "bottom_deck": [c.to_json() for c in room.game_state.bottom_deck],
     })
     await broadcast_game_states(room)
 
@@ -435,9 +431,35 @@ async def handle_message(
                         state.attacking_points,
                     )
 
-            await broadcast_game_states(room)
-            if result.get("round_over"):
-                await handle_round_end(room, manager, deal_delay)
+            if result.get("trick_complete"):
+                # Engine already cleared current_trick. Restore the full
+                # trick so all players can see the 4th player's cards.
+                full_trick = list(trick_snapshot)
+                if not any(pid == player_id for pid, _ in full_trick):
+                    full_trick.append((player_id, list(cards)))
+                state.current_trick = full_trick
+
+                await broadcast_game_states(room)
+
+                # Hold so all players can review the completed trick.
+                # 1-2 cards per play → 3s; >2 cards per play → 5s.
+                cards_per_play = len(full_trick[0][1]) if full_trick else 1
+                delay_secs = 3 if cards_per_play <= 2 else 5
+                await broadcast_all(room, {
+                    "type": "last_trick_hold",
+                    "delay": delay_secs,
+                })
+                await asyncio.sleep(delay_secs)
+
+                # Clear trick state after the hold.
+                state.current_trick = []
+
+                if result.get("round_over"):
+                    await handle_round_end(room, manager, deal_delay)
+                else:
+                    await broadcast_game_states(room)
+            else:
+                await broadcast_game_states(room)
 
         # ── Read-only play validation ──────────────────────────────────────
 

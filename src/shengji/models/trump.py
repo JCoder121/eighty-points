@@ -10,9 +10,9 @@ from shengji.models.card import Card, Rank, Suit, RANK_ORDER
 class TrumpContext:
     """Captures the trump rank and suit for a single round.
 
-    trump_suit=None means no-trump: trump-rank cards keep their own suit for
-    trick-following purposes, but are still ranked above all suited cards in
-    card_order.
+    trump_suit=None means no-trump: trump-rank cards are always trump for
+    trick-following (effective_suit returns "trump") and are ranked above all
+    suited cards in card_order.
 
     Card ordering tiers (higher tier = stronger card):
       0 — non-trump-suit, non-trump-rank suited cards
@@ -69,15 +69,14 @@ class TrumpContext:
     def effective_suit(self, card: Card) -> str:
         """Return the suit string used for trick-following.
 
-        Returns "trump" for jokers, trump-rank cards (when trump_suit is set),
-        and trump-suit cards.  In no-trump mode (trump_suit=None), trump-rank
-        cards retain their own suit value; only jokers return "trump".
+        Returns "trump" for jokers, trump-rank cards (regardless of mode),
+        and trump-suit cards.  Trump-rank cards are always trump — even in
+        no-trump mode — because they must follow trump leads and are ranked
+        in the trump hierarchy by card_order.
         """
         if card.suit == Suit.JOKER:
             return "trump"
         if card.rank == self.trump_rank:
-            if self.trump_suit is None:
-                return card.suit.value  # no-trump: keep own suit
             return "trump"
         if self.trump_suit is not None and card.suit == self.trump_suit:
             return "trump"

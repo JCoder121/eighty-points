@@ -730,3 +730,120 @@ class TestIsValidFollowTractorWithPairs:
         assert is_valid_follow([_A_H2, _A_H2, _K_H2, _K_H2], hand, led, "trump", self.ctx)
         # Playing non-tractor cards when a full tractor exists is invalid
         assert not is_valid_follow([_A_H2, _A_H2, _Q_H2, _J_H2], hand, led, "trump", self.ctx)
+
+
+# ---------------------------------------------------------------------------
+# is_valid_follow — Throw (pair+single, etc.) — issue #25
+# ---------------------------------------------------------------------------
+
+# Use clubs-trump context so spades/diamonds are plain suits
+_CTX_C = TrumpContext(trump_rank=Rank.TWO, trump_suit=Suit.CLUBS)
+
+_A_S2 = _c(Suit.SPADES, Rank.ACE)
+_K_S2 = _c(Suit.SPADES, Rank.KING)
+_Q_S2 = _c(Suit.SPADES, Rank.QUEEN)
+_J_S2 = _c(Suit.SPADES, Rank.JACK)
+_T_S2 = _c(Suit.SPADES, Rank.TEN)
+_9_S2 = _c(Suit.SPADES, Rank.NINE)
+_8_S2 = _c(Suit.SPADES, Rank.EIGHT)
+_A_D2 = _c(Suit.DIAMONDS, Rank.ACE)
+_K_D2 = _c(Suit.DIAMONDS, Rank.KING)
+
+# AKK throw: Single(A) + IdenticalGroup(2, KK)
+_THROW_AKK = Throw(components=[Single(), IdenticalGroup(count=2)])
+
+
+class TestIsValidFollowThrowNoPair:
+    """#25: Follower has suited cards but no pair — any suited cards valid."""
+
+    ctx = _CTX_C
+
+    def test_any_three_suited_valid(self):
+        hand = [_A_S2, _Q_S2, _J_S2, _T_S2, _A_D2]
+        led = _THROW_AKK
+        # Any 3 of 4 spades should work
+        assert is_valid_follow([_A_S2, _Q_S2, _J_S2], hand, led, "spades", self.ctx)
+        assert is_valid_follow([_A_S2, _Q_S2, _T_S2], hand, led, "spades", self.ctx)
+        assert is_valid_follow([_A_S2, _J_S2, _T_S2], hand, led, "spades", self.ctx)
+        assert is_valid_follow([_Q_S2, _J_S2, _T_S2], hand, led, "spades", self.ctx)
+
+    def test_must_play_suited_not_offsuit(self):
+        hand = [_A_S2, _Q_S2, _J_S2, _T_S2, _A_D2]
+        led = _THROW_AKK
+        # Playing off-suit when suited cards available is invalid
+        assert not is_valid_follow([_A_S2, _Q_S2, _A_D2], hand, led, "spades", self.ctx)
+
+
+class TestIsValidFollowThrowWithPair:
+    """#25: Follower has a pair — must play SOME pair, single slot free."""
+
+    ctx = _CTX_C
+
+    def test_must_include_pair(self):
+        hand = [_A_S2, _A_S2, _Q_S2, _J_S2, _A_D2]
+        led = _THROW_AKK
+        # Must play the pair AA + any single
+        assert is_valid_follow([_A_S2, _A_S2, _Q_S2], hand, led, "spades", self.ctx)
+        assert is_valid_follow([_A_S2, _A_S2, _J_S2], hand, led, "spades", self.ctx)
+
+    def test_omitting_pair_invalid(self):
+        hand = [_A_S2, _A_S2, _Q_S2, _J_S2, _A_D2]
+        led = _THROW_AKK
+        # Playing 3 singles when a pair exists is invalid
+        assert not is_valid_follow([_A_S2, _Q_S2, _J_S2], hand, led, "spades", self.ctx)
+
+
+class TestIsValidFollowThrowMultiplePairs:
+    """#25: Follower has two pairs — can choose which pair to play."""
+
+    ctx = _CTX_C
+
+    def test_either_pair_valid(self):
+        hand = [_A_S2, _A_S2, _K_S2, _K_S2, _Q_S2]
+        led = _THROW_AKK
+        # Either pair should satisfy the obligation
+        assert is_valid_follow([_A_S2, _A_S2, _Q_S2], hand, led, "spades", self.ctx)
+        assert is_valid_follow([_K_S2, _K_S2, _Q_S2], hand, led, "spades", self.ctx)
+
+    def test_no_pair_in_proposed_invalid(self):
+        hand = [_A_S2, _A_S2, _K_S2, _K_S2, _Q_S2]
+        led = _THROW_AKK
+        # Playing 3 singles when pairs exist is invalid
+        assert not is_valid_follow([_A_S2, _K_S2, _Q_S2], hand, led, "spades", self.ctx)
+
+
+class TestIsValidFollowThrowNotEnoughSuited:
+    """#25: Follower has fewer suited cards than throw size — partial follow."""
+
+    ctx = _CTX_C
+
+    def test_partial_follow_with_offsuit_fill(self):
+        hand = [_A_S2, _Q_S2, _A_D2, _K_D2]
+        led = _THROW_AKK
+        # Has 2 spades, needs 3 — must play both spades + 1 off-suit
+        assert is_valid_follow([_A_S2, _Q_S2, _A_D2], hand, led, "spades", self.ctx)
+        assert is_valid_follow([_A_S2, _Q_S2, _K_D2], hand, led, "spades", self.ctx)
+
+    def test_partial_follow_must_use_all_suited(self):
+        hand = [_A_S2, _Q_S2, _A_D2, _K_D2]
+        led = _THROW_AKK
+        # Playing only 1 spade when 2 available is invalid
+        assert not is_valid_follow([_A_S2, _A_D2, _K_D2], hand, led, "spades", self.ctx)
+
+
+class TestIsValidFollowThrowTwoPairComponents:
+    """Throw with two pair components (e.g. KK+QQ) — must play two pairs if available."""
+
+    ctx = _CTX_C
+
+    def test_two_pairs_required(self):
+        led = Throw(components=[IdenticalGroup(count=2), IdenticalGroup(count=2)])
+        hand = [_A_S2, _A_S2, _K_S2, _K_S2, _Q_S2, _J_S2]
+        # Must play both pairs
+        assert is_valid_follow([_A_S2, _A_S2, _K_S2, _K_S2], hand, led, "spades", self.ctx)
+
+    def test_one_pair_when_two_available_invalid(self):
+        led = Throw(components=[IdenticalGroup(count=2), IdenticalGroup(count=2)])
+        hand = [_A_S2, _A_S2, _K_S2, _K_S2, _Q_S2, _J_S2]
+        # Playing only one pair + 2 singles when two pairs exist is invalid
+        assert not is_valid_follow([_A_S2, _A_S2, _Q_S2, _J_S2], hand, led, "spades", self.ctx)

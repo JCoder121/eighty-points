@@ -299,9 +299,11 @@ def is_valid_follow(
     if isinstance(led_format, Tractor):
         return _is_valid_tractor_follow(suited_in_proposed, suited_in_hand, led_format, ctx)
 
-    # Throw — complex; fall back to get_legal_plays
-    legal = get_legal_plays(hand, led_format, led_suit, ctx)
-    return any(_multiset_eq(proposed, opt) for opt in legal)
+    # Throw — validate structural obligations directly
+    if isinstance(led_format, Throw):
+        return _is_valid_throw_follow(suited_in_proposed, suited_in_hand, led_format, ctx)
+
+    return False
 
 
 def _is_valid_tractor_follow(
@@ -355,6 +357,107 @@ def _is_valid_tractor_follow(
         proposed_copy.remove(req_card)
 
     # Step 4: remaining proposed cards are free-choice singles — always valid
+    return True
+
+
+def _is_valid_throw_follow(
+    proposed_suited: list[Card],
+    hand_suited: list[Card],
+    led: Throw,
+    ctx: TrumpContext,
+) -> bool:
+    """Validate a throw follow using structural obligations.
+
+    For each component of the throw (processed largest-first), determine what
+    structure the hand obliges the follower to play, then verify the proposed
+    play contains matching structures.  Any remaining slots are free-choice
+    suited cards.
+
+    Structural obligations (not card-specific) are used for IdenticalGroup
+    components so that the player can choose *which* pair/group to play.
+    Tractor components use card-specific obligations (same as tractor follow)
+    since multiple tractors in one suit is extremely rare.
+    """
+    hand_rem = list(hand_suited)
+
+    # Card-specific required cards (for tractor components)
+    required_cards: list[Card] = []
+    # Structural obligations: list of group sizes the proposed must contain
+    group_obligations: list[int] = []
+
+    for comp in sorted(led.components, key=lambda f: -_format_card_count(f)):
+        comp_n = _format_card_count(comp)
+
+        if isinstance(comp, Tractor):
+            # Use tractor follow logic: greedily claim tractors then pairs
+            remaining = list(hand_rem)
+            comp_required: list[Card] = []
+
+            for t in sorted(find_tractors(remaining, ctx), key=len, reverse=True):
+                if len(comp_required) >= comp_n:
+                    break
+                take = min(len(t), comp_n - len(comp_required))
+                comp_required.extend(t[:take])
+                for c in t[:take]:
+                    remaining.remove(c)
+
+            if len(comp_required) < comp_n:
+                by_pos: dict[tuple, list[Card]] = defaultdict(list)
+                for c in remaining:
+                    by_pos[ctx.card_order(c)].append(c)
+                for pos in sorted(by_pos.keys(), reverse=True):
+                    if len(comp_required) >= comp_n:
+                        break
+                    group = by_pos[pos]
+                    if len(group) >= 2:
+                        take = min(len(group), comp_n - len(comp_required))
+                        comp_required.extend(group[:take])
+                        for c in group[:take]:
+                            remaining.remove(c)
+
+            required_cards.extend(comp_required)
+            hand_rem = remaining
+
+        elif isinstance(comp, IdenticalGroup):
+            k = comp.count
+            by_pos: dict[tuple, list[Card]] = defaultdict(list)
+            for c in hand_rem:
+                by_pos[ctx.card_order(c)].append(c)
+            for pos in sorted(by_pos.keys(), reverse=True):
+                if len(by_pos[pos]) >= k:
+                    group_obligations.append(k)
+                    for c in by_pos[pos][:k]:
+                        hand_rem.remove(c)
+                    break
+
+        # Single: no structural obligation
+
+    # --- Validate proposed ---
+
+    prop_rem = list(proposed_suited)
+
+    # Check card-specific requirements (tractor components)
+    for req in required_cards:
+        if req not in prop_rem:
+            return False
+        prop_rem.remove(req)
+
+    # Check structural requirements (group components) — largest first
+    for k in sorted(group_obligations, reverse=True):
+        by_pos: dict[tuple, list[Card]] = defaultdict(list)
+        for c in prop_rem:
+            by_pos[ctx.card_order(c)].append(c)
+        found = False
+        for pos in sorted(by_pos.keys(), reverse=True):
+            if len(by_pos[pos]) >= k:
+                for c in by_pos[pos][:k]:
+                    prop_rem.remove(c)
+                found = True
+                break
+        if not found:
+            return False
+
+    # Remaining proposed cards are free-choice suited cards — always valid
     return True
 
 

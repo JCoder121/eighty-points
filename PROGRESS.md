@@ -4,6 +4,24 @@ Newest entries at the top.
 
 ---
 
+## Session 23 — Fix throw follow validation (#25) + scoring step change
+
+**Date:** 2026-03-21
+
+**Branch:** `fix/throw-follow-scoring-step`. 553 tests passing.
+
+### What was changed
+
+- **Throw follow validation (#25):** `is_valid_follow()` in `tricks.py` previously fell back to `get_legal_plays()` for throw follows, which returned only ONE valid combination. Players could only play that exact set of cards — other equally-valid selections were rejected.
+- Added `_is_valid_throw_follow()` that validates **structural obligations** instead of exact card identity:
+  - IdenticalGroup components: if hand has a pair, proposed must contain SOME pair (any pair, not a specific one)
+  - Tractor components: card-specific required (reuses tractor follow logic)
+  - Single components: no obligation — any suited card fills the slot
+- 10 new tests covering: no-pair follows (any suited cards valid), pair-required follows, multiple-pair choice, partial follows with off-suit fill, and two-pair-component throws.
+- **Scoring step change:** Rank skip step reduced from 40 to 20 points (threshold stays at 80). Clean 20-point bands everywhere, no caps, no special cases. Defending: 0-19 → +4, 20-39 → +3, 40-59 → +2, 60-79 → +1. Attacking: 80-99 → +0, 100-119 → +1, 120-139 → +2, 140+ → +3. Updated all scoring tests.
+
+---
+
 ## Session 22 — Unique player names + leader display/logic (#31, #32)
 
 **Date:** 2026-03-21

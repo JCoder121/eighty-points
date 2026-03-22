@@ -280,34 +280,28 @@ def compute_rank_advancement(
               over as defenders at the same rank; the "winner" field is still
               "attacking" in this case to indicate they take over).
 
-    Threshold table (step = 20 * n_decks; for n=2 step=40, threshold=80):
+    Threshold table (threshold = 40 * n_decks = 80; step = 10 * n_decks = 20):
       attacking_points      winner       steps
-      ───────────────────────────────────────
-      0                     defending    3
-      1  to step-1  (1-39)  defending    2
-      step to 2s-1 (40-79)  defending    1
-      2s to 3s-1  (80-119)  attacking    0   (take over at same rank)
-      3s to 4s-1 (120-159)  attacking    1
-      4s to 5s-1 (160-199)  attacking    2
-      5s+        (200+)     attacking    3
+      ──────────────────────────────────────────
+      0  to 19              defending    4
+      20 to 39              defending    3
+      40 to 59              defending    2
+      60 to 79              defending    1
+      80 to 99              attacking    0   (take over at same rank)
+      100 to 119            attacking    1
+      120 to 139            attacking    2
+      140+                  attacking    3
 
-    With 2 decks (200 total card points), the key threshold is 80 points:
-    attackers scoring ≥ 80 means they take over as defenders (same rank or
-    higher).  The bottom-deck multiplier can push totals above 200.
+    Every band is 20 points wide (step = 10 * n_decks).  The key threshold
+    is 80 points (40 * n_decks): attackers scoring ≥ 80 take over as
+    defenders.  The bottom-deck multiplier can push totals above 200.
     """
-    step = 20 * n_decks  # = 40 for n=2; threshold for "attackers win" = 2*step = 80
+    threshold = 40 * n_decks  # = 80 for n=2; attackers need this many to win
+    step = 10 * n_decks       # = 20 for n=2; each skip requires this many extra
 
-    if attacking_points == 0:
-        return ("defending", 3)
-    elif attacking_points < step:
-        return ("defending", 2)
-    elif attacking_points < 2 * step:
-        return ("defending", 1)
-    elif attacking_points < 3 * step:
-        return ("attacking", 0)
-    elif attacking_points < 4 * step:
-        return ("attacking", 1)
-    elif attacking_points < 5 * step:
-        return ("attacking", 2)
+    if attacking_points < threshold:
+        steps = (threshold - attacking_points + step - 1) // step
+        return ("defending", steps)
     else:
-        return ("attacking", 3)
+        steps = (attacking_points - threshold) // step
+        return ("attacking", steps)

@@ -24,6 +24,7 @@
 - **Bidding pass fix:** outbid players can now pass (frontend checked current highest bidder only).
 - **No-trump mode fix:** trump-rank cards (2s) correctly treated as trump for trick-following and throw validation.
 - **Throw trick-winning:** format-matching trump required to beat a throw lead (pair for pair, single for single).
+- **Re-deal notification:** all-pass triggers a visible banner to all players before re-dealing.
 
 ## What's built
 

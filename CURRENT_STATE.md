@@ -19,6 +19,11 @@
 - **End screen shows rank progression** (`old → new`) so players can see what changed each round.
 - **Unique player names enforced:** server rejects duplicate names in a room (HTTP 400).
 - **Leader displayed in UI:** trump info bar shows `· Leader: {name}` after leader is determined; round 2+ leader is predetermined (not overridden by bidding).
+- **Bottom cards shown at round-over recap** for all players regardless of outcome.
+- **Trick hold delay:** every completed trick holds 3s (single/pair) or 5s (>2 cards) before clearing so all players can review.
+- **Bidding pass fix:** outbid players can now pass (frontend checked current highest bidder only).
+- **No-trump mode fix:** trump-rank cards (2s) correctly treated as trump for trick-following and throw validation.
+- **Throw trick-winning:** format-matching trump required to beat a throw lead (pair for pair, single for single).
 
 ## What's built
 

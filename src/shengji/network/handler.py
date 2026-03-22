@@ -354,6 +354,10 @@ async def handle_message(
                 # If close_bidding triggered a re-deal, engine has already
                 # called start_dealing() internally; re-run the deal loop.
                 if state.phase == GamePhase.DEALING:
+                    await broadcast_all(room, {
+                        "type": "redeal",
+                        "reason": "All players passed — re-dealing.",
+                    })
                     asyncio.create_task(start_and_deal(room, manager, deal_delay))
 
         # ── Bottom exchange ───────────────────────────────────────────────

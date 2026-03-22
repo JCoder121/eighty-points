@@ -8,7 +8,8 @@
 ## Where we are
 
 - **All milestones (M0–M8) are complete.** The game is playable end-to-end in the browser.
-- **539 tests passing** (pytest).
+- **553 tests passing** (pytest).
+- **Scoring:** 80 pts to win, 20 pts per rank skip (both sides, no caps).
 - **Current branch:** `main`
 - **No automated frontend tests yet.** All frontend testing is manual.
 - **Mobile layout:** Basic responsive support added — horizontal scroll hand on portrait mobile (≤600px), larger tap targets.

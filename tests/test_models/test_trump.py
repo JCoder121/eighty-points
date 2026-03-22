@@ -168,10 +168,11 @@ class TestEffectiveSuit:
         assert self.TC.effective_suit(c(D, Rank.KING)) == "diamonds"
         assert self.TC.effective_suit(c(C, Rank.FIVE)) == "clubs"
 
-    def test_no_trump_trump_rank_keeps_suit(self):
+    def test_no_trump_trump_rank_is_trump(self):
         tc_nt = ctx(Rank.TWO, None)
-        assert tc_nt.effective_suit(c(S, Rank.TWO)) == "spades"
-        assert tc_nt.effective_suit(c(H, Rank.TWO)) == "hearts"
+        # In no-trump, trump-rank cards are still trump for trick-following.
+        assert tc_nt.effective_suit(c(S, Rank.TWO)) == "trump"
+        assert tc_nt.effective_suit(c(H, Rank.TWO)) == "trump"
 
     def test_no_trump_jokers_still_trump(self):
         tc_nt = ctx(Rank.TWO, None)

@@ -193,6 +193,7 @@ function dispatchMessage(msg) {
     case "game_aborted": handleGameAborted(msg); break;
     case "play_valid":   handlePlayValid();      break;
     case "play_invalid": handlePlayInvalid(msg); break;
+    case "last_trick_hold": handleLastTrickHold(msg); break;
     case "error":        handleError(msg);       break;
     default: console.warn("Unknown message type:", msg.type);
   }
@@ -251,6 +252,24 @@ function handleGameState(msg) {
   if (document.getElementById("screen-game").style.display !== "none") {
     renderGame(msg);
   }
+}
+
+function handleLastTrickHold(msg) {
+  // Show a countdown in the trick status area so players know round is ending.
+  const statusEl = document.getElementById("trick-status");
+  if (!statusEl) return;
+  const delaySecs = Math.ceil(msg.delay || 3);
+  let remaining = delaySecs;
+  statusEl.textContent = `Round ending in ${remaining}s…`;
+  const timer = setInterval(() => {
+    remaining--;
+    if (remaining <= 0) {
+      clearInterval(timer);
+      statusEl.textContent = "";
+    } else {
+      statusEl.textContent = `Round ending in ${remaining}s…`;
+    }
+  }, 1000);
 }
 
 function handleRoundOver(msg) {
@@ -313,14 +332,14 @@ function handleRoundOver(msg) {
     div.appendChild(teamsRow);
   }
 
-  // Bottom deck reveal (only when defenders win)
-  if (isDefWin && bottomDeck && bottomDeck.length) {
+  // Bottom deck reveal (always shown so all players can review)
+  if (bottomDeck && bottomDeck.length) {
     const botSection = document.createElement("div");
     botSection.className = "bottom-section";
 
     const botLabel = document.createElement("div");
     botLabel.className = "bottom-label";
-    botLabel.textContent = "Attackers' buried cards:";
+    botLabel.textContent = "Bottom cards:";
     botSection.appendChild(botLabel);
 
     const botCards = document.createElement("div");
@@ -1134,10 +1153,12 @@ function renderBidArea(area, gs) {
   ctrlRow.className = "action-row";
   if (gs.phase === "bidding_after_deal") {
     const passBtn = document.createElement("button");
-    // Once a player has placed a bid they cannot take it back by passing.
-    const iHaveBid = (gs.bids || []).some(b => b.player_id === S.playerId);
+    // Only the current highest bidder cannot pass (can't take back your own
+    // winning bid).  An outbid player MUST be able to pass.
+    const bids = gs.bids || [];
+    const isCurrentBidder = bids.length > 0 && bids[bids.length - 1].player_id === S.playerId;
     passBtn.textContent = S.hasPassed ? "Passed ✓" : "Pass";
-    passBtn.disabled = iHaveBid || S.hasPassed;
+    passBtn.disabled = isCurrentBidder || S.hasPassed;
     if (S.hasPassed) passBtn.classList.add("btn-passed");
     if (!passBtn.disabled) {
       passBtn.addEventListener("click", () => {

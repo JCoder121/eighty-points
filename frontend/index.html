@@ -587,6 +587,32 @@
     }
 
     /* ------------------------------------------------------------------ */
+    /* Re-deal banner                                                       */
+    /* ------------------------------------------------------------------ */
+    .redeal-banner {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 18px;
+      font-weight: bold;
+      color: #ffe066;
+      background: rgba(80, 60, 0, 0.92);
+      border: 2px solid #ffcc00;
+      border-radius: 8px;
+      padding: 16px 32px;
+      text-align: center;
+      z-index: 9999;
+      animation: redeal-fade 3s forwards;
+      pointer-events: none;
+    }
+    @keyframes redeal-fade {
+      0%   { opacity: 1; }
+      60%  { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    /* ------------------------------------------------------------------ */
     /* Miscellaneous                                                        */
     /* ------------------------------------------------------------------ */
     .dealer-tag {

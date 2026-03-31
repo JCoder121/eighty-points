@@ -194,6 +194,7 @@ function dispatchMessage(msg) {
     case "play_valid":   handlePlayValid();      break;
     case "play_invalid": handlePlayInvalid(msg); break;
     case "last_trick_hold": handleLastTrickHold(msg); break;
+    case "redeal":       handleRedeal(msg);      break;
     case "error":        handleError(msg);       break;
     default: console.warn("Unknown message type:", msg.type);
   }
@@ -270,6 +271,14 @@ function handleLastTrickHold(msg) {
       statusEl.textContent = `Round ending in ${remaining}s…`;
     }
   }, 1000);
+}
+
+function handleRedeal(msg) {
+  const banner = document.createElement("div");
+  banner.className = "redeal-banner";
+  banner.textContent = msg.reason || "All players passed — re-dealing.";
+  document.body.appendChild(banner);
+  setTimeout(() => banner.remove(), 3000);
 }
 
 function handleRoundOver(msg) {

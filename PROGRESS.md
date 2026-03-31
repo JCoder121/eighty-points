@@ -4,6 +4,20 @@ Newest entries at the top.
 
 ---
 
+## Session 25 — Re-deal notification on all-pass (#42)
+
+**Date:** 2026-03-21
+
+**Branch:** `fix/redeal-all-pass`. 553 tests passing.
+
+### What was changed
+
+- **Backend (`handler.py`):** after `close_bidding()` detects all-pass, server broadcasts `{"type": "redeal", "reason": "All players passed — re-dealing."}` to all players before triggering the re-deal task.
+- **Frontend (`app.js`):** added `handleRedeal()` — creates a centered `.redeal-banner` div that auto-removes after 3s.
+- **Frontend (`index.html`):** added `.redeal-banner` CSS (fixed center, gold border, 3s fade-out animation).
+
+---
+
 ## Session 24 — Display fixes, trick delay, bidding pass, no-trump suit (#39, #40)
 
 **Date:** 2026-03-21

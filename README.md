@@ -9,9 +9,6 @@ There are some remaining unresolved issues. One day, I might return to this proj
 
 [Game end state demo](https://youtu.be/XYI9y-lNWTo)
 
-
-> **[Screen recording placeholder]** — A walkthrough of gameplay will be added here.
-
 ## Features
 
 - **Two game modes**

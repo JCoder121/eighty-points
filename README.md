@@ -2,9 +2,14 @@
 
 A real-time multiplayer web implementation of the Chinese trick-taking card game Shengji (升级, "Upgrade"), playable in the browser with 4 players over WebSockets.
 
-## Demo
+There are some remaining unresolved issues. One day, I might return to this project and fully complete it, with superuser mode (game state modifications), code refactoring, and an embedded demo link
 
-<!-- TODO: Replace with screen recording link -->
+## Demo
+[Game start state demo](https://youtu.be/js4RYXfHU3E)
+
+[Game end state demo](https://youtu.be/XYI9y-lNWTo)
+
+
 > **[Screen recording placeholder]** — A walkthrough of gameplay will be added here.
 
 ## Features

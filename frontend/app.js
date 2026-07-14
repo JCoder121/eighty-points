@@ -103,10 +103,10 @@ function setGameError(msg) {
 
 // ── REST helpers ──────────────────────────────────────────────────────────
 
-async function apiPost(path, body) {
+async function apiPost(path, body, extraHeaders) {
   const resp = await fetch(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(extraHeaders || {}) },
     body: JSON.stringify(body),
   });
   const data = await resp.json();
@@ -1471,7 +1471,8 @@ function renderPlayArea(area, gs) {
 
 async function enableSuperuser() {
   try {
-    await apiPost(`/superuser/enable/${S.roomId}`, {});
+    // The superuser API authenticates via X-Player-Id (must be game master).
+    await apiPost(`/superuser/enable/${S.roomId}`, {}, { "X-Player-Id": S.playerId });
     const btn = document.getElementById("btn-superuser-enable");
     btn.textContent = "Superuser Mode: ON";
     btn.disabled    = true;

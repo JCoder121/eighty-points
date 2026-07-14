@@ -95,6 +95,25 @@ class GameEngine:
                 return p
         raise ValueError(f"Unknown player_id: {player_id!r}")
 
+    def _recompute_attacking_points(self) -> None:
+        """Refresh the live attacking-points total from current team flags.
+
+        Called at every trick completion and immediately when a friend
+        reveal flips a player's team (issue #43) so the displayed total
+        never changes silently between those events.
+        """
+        state = self.state
+        attacker_ids_live = frozenset(
+            p.id for p in state.players if not p.is_defending
+        )
+        state.attacking_points = sum(
+            c.point_value
+            for pid, tricks in state.tricks_won.items()
+            if pid in attacker_ids_live
+            for trick in tricks
+            for c in trick
+        )
+
     def _next_player_id(self, after_id: str) -> str:
         """Return the player_id seated counter-clockwise from *after_id*.
 
@@ -643,8 +662,14 @@ class GameEngine:
         player.hand = hand_copy
 
         # Notify mode strategy of each card played (e.g. friend reveal in Find Friends).
+        friends_before = set(state.revealed_friends)
         for card in cards:
             self.mode.resolve_friend(state, player_id, card)
+        if state.revealed_friends != friends_before:
+            # A friend just flipped teams — re-attribute the live score NOW so
+            # players see the change together with the reveal popup, not as a
+            # silent drop at the next trick boundary (issue #43).
+            self._recompute_attacking_points()
 
         # Append to current trick
         state.current_trick.append((player_id, list(cards)))
@@ -679,14 +704,7 @@ class GameEngine:
 
         # Update live attacking_points (without bottom-deck multiplier — applied at end_round).
         # Teams are assigned during BOTTOM_EXCHANGE so is_defending is reliable here.
-        attacker_ids_live = frozenset(p.id for p in state.players if not p.is_defending)
-        state.attacking_points = sum(
-            c.point_value
-            for pid, tricks in state.tricks_won.items()
-            if pid in attacker_ids_live
-            for trick in tricks
-            for c in trick
-        )
+        self._recompute_attacking_points()
 
         # Check if round is over (all hands empty)
         round_over = all(len(p.hand) == 0 for p in state.players)

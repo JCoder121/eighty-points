@@ -21,10 +21,9 @@ from typing import TYPE_CHECKING, Callable, Awaitable
 
 from shengji.engine.scoring import count_attacking_points, compute_rank_advancement
 from shengji.engine.tricks import (
-    get_legal_plays,
+    find_beatable_components,
     is_valid_follow,
     resolve_trick_winner,
-    validate_throw,
 )
 from shengji.models.bid import Bid
 from shengji.models.deck import Deck, NUM_PLAYERS, BOTTOM_SIZE, HAND_SIZE
@@ -159,6 +158,7 @@ class GameEngine:
         state.tricks_won = {p.id: [] for p in state.players}
         state.last_winning_play = []
         state.attacking_points = 0
+        state.throw_penalties = {}
         state.trick_number = 1
         state.current_leader_id = state.round_leader_id
         state.current_turn_id = ""  # not used during dealing
@@ -530,11 +530,25 @@ class GameEngine:
           "trick_winner":   str | None — player_id of winner if trick complete.
           "round_over":     bool — True when all 25 tricks have been played.
 
+        Failed throw (甩牌) handling
+        ---------------------------
+        A leader's throw whose components can be beaten is NOT rejected.
+        Instead the leader is forced to lead only the smallest beatable
+        component (fewest cards; tie-break: weakest by max card_order) and
+        concedes a penalty of 10 pts per card in the ATTEMPTED throw.  The
+        penalty accumulates in state.throw_penalties and is attributed to
+        teams at round end (end_round) using FINAL team membership.  When
+        this happens the result dict additionally contains:
+          "throw_failed":    True
+          "attempted_cards": list[Card] — the original throw attempt
+          "forced_cards":    list[Card] — what was actually led
+          "penalty":         int — points conceded (10 × attempted cards)
+
         Raises
         ------
         ValueError
-            On wrong phase, out-of-turn play, cards not in hand, illegal
-            follow, or invalid throw.
+            On wrong phase, out-of-turn play, cards not in hand, or illegal
+            follow.
         """
         state = self.state
         if state.phase != GamePhase.PLAYING:
@@ -565,19 +579,46 @@ class GameEngine:
             raise ValueError("Cannot play cards: trump context is not set.")
 
         is_leader = len(state.current_trick) == 0
+        throw_failure: dict | None = None
 
         if is_leader:
             # Leader can play any valid format
             led_fmt = classify_play(cards, ctx)
 
-            # If it's a throw, validate it
+            # If it's a throw, check whether any component can be beaten.
+            # A failed throw is not rejected: the leader is forced to lead
+            # only the smallest beatable component and concedes 10 pts per
+            # attempted card (attributed to teams in end_round).
             if isinstance(led_fmt, Throw):
                 all_hands = {p.id: p.hand for p in state.players}
-                if not validate_throw(cards, player_id, all_hands, ctx):
-                    raise ValueError(
-                        "Invalid throw: at least one component can be beaten "
-                        "by an opponent's card of the same suit."
+                beatable = find_beatable_components(cards, player_id, all_hands, ctx)
+                if beatable:
+                    penalty = 10 * len(cards)
+                    # Smallest beatable component: fewest cards; tie-break
+                    # weakest (lowest max card_order).
+                    _, forced_cards = min(
+                        beatable,
+                        key=lambda bc: (
+                            len(bc[1]),
+                            max(ctx.card_order(c) for c in bc[1]),
+                        ),
                     )
+                    state.throw_penalties[player_id] = (
+                        state.throw_penalties.get(player_id, 0) + penalty
+                    )
+                    throw_failure = {
+                        "throw_failed": True,
+                        "attempted_cards": list(cards),
+                        "forced_cards": list(forced_cards),
+                        "penalty": penalty,
+                    }
+                    # Substitute the forced component; the rest of the
+                    # attempted cards stay in the leader's hand.
+                    cards = list(forced_cards)
+                    hand_copy = list(player.hand)
+                    for card in cards:
+                        hand_copy.remove(card)
+                    led_fmt = classify_play(cards, ctx)
 
             state._led_format = led_fmt  # store for followers to check against
             state._led_suit = ctx.effective_suit(cards[0])
@@ -611,7 +652,10 @@ class GameEngine:
         # Advance turn
         if len(state.current_trick) < NUM_PLAYERS:
             state.current_turn_id = self._next_player_id(player_id)
-            return {"trick_complete": False, "trick_winner": None, "round_over": False}
+            result = {"trick_complete": False, "trick_winner": None, "round_over": False}
+            if throw_failure:
+                result.update(throw_failure)
+            return result
 
         # All 4 players have played — resolve the trick
         led_suit = getattr(state, "_led_suit", ctx.effective_suit(state.current_trick[0][1][0]))
@@ -649,11 +693,14 @@ class GameEngine:
         if round_over:
             state.transition_to(GamePhase.SCORING)
 
-        return {
+        result = {
             "trick_complete": True,
             "trick_winner": winner_id,
             "round_over": round_over,
         }
+        if throw_failure:
+            result.update(throw_failure)
+        return result
 
     # ------------------------------------------------------------------
     # Round resolution
@@ -667,7 +714,9 @@ class GameEngine:
         Steps
         -----
         1. Determine attacking team from mode strategy.
-        2. Count attacking points (with bottom-deck multiplier if applicable).
+        2. Count attacking points (with bottom-deck multiplier if applicable),
+           then apply failed-throw penalties by FINAL team (defender thrower
+           → attackers gain +P; attacker thrower → −P, clamped at ≥ 0).
         3. Determine rank advancement winner and step count.
         4. Advance the winning team's ranks (clamped at ACE).
         5. Check for game over (any player at ACE whose team just defended).
@@ -711,6 +760,19 @@ class GameEngine:
             last_trick_cards=state.last_winning_play,
             ctx=ctx,
         )
+
+        # Apply failed-throw penalties using FINAL teams (a thrower may have
+        # flipped teams via friend reveal after the throw).  A defender's
+        # penalty is gained by the attackers (+P); an attacker's penalty is
+        # deducted from attacking points (−P), with the total clamped at 0
+        # (only attacker points exist numerically).
+        throw_penalty_adjustment = 0
+        for pid, penalty in state.throw_penalties.items():
+            if pid in attacker_ids:
+                throw_penalty_adjustment -= penalty
+            else:
+                throw_penalty_adjustment += penalty
+        attacking_pts = max(0, attacking_pts + throw_penalty_adjustment)
         state.attacking_points = attacking_pts
 
         # Compute advancement
@@ -766,6 +828,10 @@ class GameEngine:
             "game_over": game_over,
             "next_round_leader_id": next_leader_id if not game_over else None,
             "round_players": round_players,  # team/rank snapshot for round_over display
+            # Net failed-throw penalty applied to attacking points this round
+            # (positive: defenders threw badly, attackers gained; negative:
+            # attackers threw badly and were deducted, pre-clamp).
+            "throw_penalty_adjustment": throw_penalty_adjustment,
         }
 
     async def deal_all_cards(

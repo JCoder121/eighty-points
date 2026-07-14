@@ -165,6 +165,23 @@ class GameLogger:
             "ordinal": ordinal,
         })
 
+    def log_throw_penalty(
+        self,
+        player_id: str,
+        attempted_cards: "list[Card]",
+        forced_cards: "list[Card]",
+        penalty: int,
+        trick_number: int,
+    ) -> None:
+        self._write({
+            "event": "throw_penalty",
+            "player_id": player_id,
+            "attempted_cards": [c.to_json() for c in attempted_cards],
+            "forced_cards": [c.to_json() for c in forced_cards],
+            "penalty": penalty,
+            "trick_number": trick_number,
+        })
+
     def log_trick_complete(
         self,
         trick_number: int,

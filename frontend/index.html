@@ -613,6 +613,34 @@
     }
 
     /* ------------------------------------------------------------------ */
+    /* Failed-throw banner + throw confirm bar                              */
+    /* ------------------------------------------------------------------ */
+    .throw-failed-banner {
+      color: #ffab91;
+      background: rgba(80, 25, 0, 0.92);
+      border-color: #ff7043;
+      animation: redeal-fade 4s forwards;
+    }
+
+    #throw-confirm-bar {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      padding: 10px 14px;
+      background: rgba(80, 60, 0, 0.5);
+      border: 1px solid #ffcc00;
+      border-radius: 8px;
+    }
+    .throw-confirm-text {
+      font-size: 13px;
+      color: #ffe066;
+      text-align: center;
+      max-width: 520px;
+    }
+
+    /* ------------------------------------------------------------------ */
     /* Miscellaneous                                                        */
     /* ------------------------------------------------------------------ */
     .dealer-tag {

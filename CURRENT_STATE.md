@@ -7,11 +7,14 @@
 
 ## Where we are
 
-- **All milestones (M0–M8) are complete.** The game is playable end-to-end in the browser.
-- **580 tests passing** (pytest).
-- **Scoring:** 80 pts to win, 20 pts per rank skip (both sides, no caps).
+- **All milestones (M0–M9) are complete** — M9's integration suite was backfilled in Session 26 (`tests/test_integration/`, 40 tests).
+- **621 tests passing** (pytest).
+- **Scoring:** 80 pts to win, 20-pt bands; attacking advancement capped at +3 (#51); defending shutout +4. Game over only when defending while ALREADY at Ace (#52). Bottom multiplier = 2× winning play's largest component, capped 8× — single 2×, pair 4×, tractor 8× (#57).
+- **Pairs require identical cards (#50):** equal-strength off-suit trump-rank cards (e.g. 2♦+2♣) no longer form phantom pairs/quads — grouping is by identity everywhere (classify, follow validation, tractors, throw checks); strength/tie rules unchanged.
+- **Seeded terminal harness:** `python scripts/play_cli.py` — interactive play (all seats or `--human N`) and `--bots --games N` fuzzer with per-action `validate_state` sweep. Deck/GameEngine accept an injectable `random.Random`. Run the fuzzer after any engine change.
+- **Handler hardening:** a non-ValueError bug in message handling no longer destroys the room (contained + logged + per-player error); `validate_state` runs after every action with violations logged; `led_format`/`led_suit` are declared GameState fields.
 - **Current branch:** `main`
-- **No automated frontend tests yet.** All frontend testing is manual.
+- **No automated frontend tests yet.** All frontend testing is manual (a Playwright smoke pass was run in Session 26; full suite is issue #29).
 - **Mobile layout:** Basic responsive support added — horizontal scroll hand on portrait mobile (≤600px), larger tap targets.
 - **Active work:** Bug fixes and polish discovered through manual play-testing.
 - **Find Friends mode** is fully implemented: correct phase ordering (declare before exchange), trump-suit/rank/joker restrictions, permanent friend status bar, friend reveal popups.

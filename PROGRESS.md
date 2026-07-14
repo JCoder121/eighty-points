@@ -4,6 +4,39 @@ Newest entries at the top.
 
 ---
 
+## Session 26 — Cleanup sweep: seeded fuzzer, 5 engine bugs, M9 backfill, hardening
+
+**Date:** 2026-07-14
+
+Full-project cleanup driven by an interview with Jeffrey (rules decisions recorded below) plus a dedicated edge-case-hunting agent. 553 → 620 tests. Everything merged to `main`; the throw-penalty feature (next entry) shipped in the same session.
+
+### Shipped (issue → PR)
+
+- **#46 → PR 47 — Seedable RNG + terminal harness.** `Deck`/`GameEngine` accept `random.Random`; `scripts/play_cli.py` plays interactively in the terminal (all seats or `--human N`, `--seed` repeats hands) or fuzzes N full bot games with a `validate_state` sweep after every action. Fuzzing immediately paid off (below).
+- **#48 → PR 49 — Tractor-follow validation.** Followers answering a tractor lead with pairs were forced to play the specific HIGHEST pairs; any pairs of the right count are legal. Found by the fuzzer (~6% of games crashed the room on a legal play). Validation is now structural.
+- **#50 → PR 56 — Identity pairs.** Off-suit trump-rank cards of different suits formed phantom pairs/quads (could lead a fake "pair", win a real pair lead with a mismatched-trump ruff). Pairs/groups now require truly identical cards everywhere; strength ties unchanged. Decision: Jeffrey confirmed identical-cards-only.
+- **#51 → PR 53 — Attacking advancement capped at +3** (formula was unbounded; 300-pt blowouts jumped ranks 2→K).
+- **#52 → PR 55 — Game over one round early.** Defenders advancing INTO Ace no longer win instantly; they must defend AT Ace (pre-advance ranks gate the check).
+- **#57 → PR 58 — Bottom multiplier.** Was stuck at 2× (classified the whole 16-card last trick). Now 2× the winning play's largest component, capped 8× (single 2×, pair 4×, tractor 8×). Also replaced scoring.py's contradictory 175-line docstring with the authoritative table.
+- **PR 59 — M9 backfill:** 40 integration tests in `tests/test_integration/` (ported from the edge-hunt agent's 91-test suite, deduped against unit tests).
+- **PR 62 — Hardening:** non-ValueError bugs in `handle_message` no longer nuke the room (contained + logged, error to acting player only); `validate_state` invariant sweep wired after every action (M9.3); `led_format`/`led_suit` promoted to declared GameState fields.
+- **#44 closed:** trump-rank tractor adjacency verified already correct in all sub-cases (2-4 skip over rank 3, off↔on-suit rank tractor, joker tractor); the one real defect found nearby was #50.
+
+### Interview decisions (authoritative)
+
+- Pair = identical cards only. R2+ leader is rotation-determined (bid only fixes trump) — intended. Self-friend / friend-in-bottom → leader 1v3 — intended. Score bands final (0–19 def+4 … 140+ att+3). Failed throw = confirm dialog → forced smallest component + 10 pts × thrown cards, attributed by FINAL teams.
+
+### E2E smoke pass (Playwright, 4 tabs)
+
+All stages verified on the final build: landing/join errors, host-only mode select, dealing + trump highlight + bid banner/pass gating, 33-card exchange, legal trick play with point tracking, throw confirm dialog (cancel preserves selection; confirm → forced component + orange banner on all tabs), round-over overlay, FF declaration UI incl. 1st/2nd ordinal, friend status bar + reveal popup. Console clean. Found + fixed (#43 → PR 63): superuser-enable button missing `X-Player-Id` header (422 always), and the #43 defect confirmed as display timing — the friend's held points vanished silently at the next trick boundary; the engine now re-attributes the live total at the reveal moment. UX note for later: the throw-failed banner fades in 4s and is easy to miss.
+
+### Known remaining
+
+- 3+-position circular-wrap tractors (K-A-3 at rank 2) split into two runs (documented limitation, pinned by test).
+- #29 Playwright full automated suite still open (this session's smoke pass was agent-driven, not committed tests).
+
+---
+
 ## Session 26 — Failed-throw penalty: forced smallest component + 10 pts/card (#60)
 
 **Date:** 2026-07-14

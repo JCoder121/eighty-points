@@ -235,19 +235,17 @@ Document these four commands in the `README.md`. There is no need for a `Makefil
 4.3. **Scoring and round resolution** (within `end_round` or `src/shengji/engine/scoring.py`):
 
 - Sum points from all tricks won by the attacking team.
-- Calculate bottom deck multiplier: `2 * length_of_largest_component` in the final trick (if the attacking team wins the last trick, bottom deck points are added with multiplier).
-- Determine rank advancement using the threshold table:
-  - For `n` decks (each 100 pts): 0 pts → defenders +3, up to 5n pts → attackers +3.
-  - Full table (implement as a function, not a giant if/else):
-    - `0`: defending +3
-    - `5 to (100n - 5)`: defending +2
-    - `100n to (200n - 5)`: defending +1
-    - `200n to (300n - 5)`: no advancement (attacking team takes over as defenders at same rank)
-    - `300n to (400n - 5)`: attacking +1
-    - `400n to (500n - 5)`: attacking +2
-    - `500n+`: attacking +3
-  - Note: `n` = number of decks. For 4 players, n=2, so thresholds are 0, 5–195, 200–395, 400+ etc.
-- Advance the winning team's ranks. If a player defends successfully at rank A, they win the game.
+- Bottom deck multiplier: if an attacker wins the last trick, bottom points × `min(8, 2 × cards in the winning play's largest component)` — single 2×, pair 4×, tractor 8× (issue #57).
+- Rank advancement — **authoritative table** (settled Session 23; the original 200n/300n draft was never shipped). Threshold `40 × n_decks = 80`, band `10 × n_decks = 20`:
+    - `0–19`: defending +4
+    - `20–39`: defending +3
+    - `40–59`: defending +2
+    - `60–79`: defending +1
+    - `80–99`: attacking +0 (take over as defenders at same rank)
+    - `100–119`: attacking +1
+    - `120–139`: attacking +2
+    - `140+`: attacking +3 (capped, issue #51)
+- Advance the winning team's ranks. Game over only when a team defends successfully while ALREADY at rank A (issue #52) — advancing into A earns the right to defend it next round.
 
 4.4. **Tests: `tests/test_engine/`**
 

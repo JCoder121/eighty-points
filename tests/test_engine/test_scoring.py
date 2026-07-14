@@ -154,7 +154,7 @@ class TestCountAttackingPoints:
         assert pts == 5  # only p0's 5 pts; bottom not added
 
     def test_attacker_wins_last_trick_single_multiplier(self):
-        """Attacker wins last trick with singles → multiplier = 2*1 = 2."""
+        """Attacker wins last trick with a single → multiplier = 2×."""
         tricks_won = {
             "p0": [[FIVE_S, THREE_S, THREE_S, THREE_S]],
             "p1": [],
@@ -162,13 +162,8 @@ class TestCountAttackingPoints:
             "p3": [],
         }
         bottom = [FIVE_S, THREE_S]  # 5 pts in bottom
-        # 4 different singles → Throw → length=1 → multiplier 2*1=2
-        last_cards = [
-            _c(Suit.SPADES, Rank.ACE),
-            _c(Suit.CLUBS, Rank.SEVEN),
-            _c(Suit.DIAMONDS, Rank.EIGHT),
-            _c(Suit.CLUBS, Rank.NINE),
-        ]
+        # Winning play is a single card → multiplier 2×
+        last_cards = [_c(Suit.SPADES, Rank.ACE)]
         pts = count_attacking_points(
             tricks_won=tricks_won,
             attacker_ids={"p0"},
@@ -177,15 +172,27 @@ class TestCountAttackingPoints:
             last_trick_cards=last_cards,
             ctx=ctx,
         )
-        # base = 5 (from trick), multiplier = 2 (single/throw → length 1), bottom = 5 pts
+        # base = 5 (from trick), multiplier = 2, bottom = 5 pts
         assert pts == 5 + 2 * 5  # = 15
 
+    def test_attacker_wins_last_trick_pair_multiplier(self):
+        """Winning with a pair → multiplier = 4× (issue #57)."""
+        bottom = [TEN_S, THREE_S]  # 10 pts in bottom
+        last_cards = [_c(Suit.SPADES, Rank.ACE), _c(Suit.SPADES, Rank.ACE)]
+        pts = count_attacking_points(
+            tricks_won={"p0": [], "p1": [], "p2": [], "p3": []},
+            attacker_ids={"p0"},
+            bottom_deck=bottom,
+            last_trick_winner_id="p0",
+            last_trick_cards=last_cards,
+            ctx=ctx,
+        )
+        assert pts == 0 + 4 * 10  # = 40
+
     def test_attacker_wins_last_trick_tractor_multiplier(self):
-        """Tractor (length=2) gives multiplier 2*2=4."""
-        tricks_won = {"p0": [], "p1": [], "p2": [], "p3": []}
+        """Winning with a 4-card tractor → multiplier = 8× (issue #57)."""
         bottom = [TEN_S, THREE_S]  # 10 pts in bottom
         # Tractor: A♠A♠K♠K♠ with trump_rank=2 (A and K adjacent)
-        # Wait, with trump_rank=2, filtered ranks are [3..A]; K=pos10, A=pos11 → adjacent
         last_cards = [
             _c(Suit.SPADES, Rank.ACE), _c(Suit.SPADES, Rank.ACE),
             _c(Suit.SPADES, Rank.KING), _c(Suit.SPADES, Rank.KING),
@@ -198,8 +205,26 @@ class TestCountAttackingPoints:
             last_trick_cards=last_cards,
             ctx=ctx,
         )
-        # Tractor length=2 → multiplier = 2*2 = 4; bottom = 10 pts
-        assert pts == 0 + 4 * 10  # = 40
+        # Tractor = 4 cards → multiplier capped formula min(8, 2*4) = 8
+        assert pts == 0 + 8 * 10  # = 80
+
+    def test_multiplier_capped_at_8(self):
+        """A 6-card tractor still gives 8× (cap), not 12×."""
+        bottom = [FIVE_S]  # 5 pts
+        last_cards = [
+            _c(Suit.SPADES, Rank.ACE), _c(Suit.SPADES, Rank.ACE),
+            _c(Suit.SPADES, Rank.KING), _c(Suit.SPADES, Rank.KING),
+            _c(Suit.SPADES, Rank.QUEEN), _c(Suit.SPADES, Rank.QUEEN),
+        ]
+        pts = count_attacking_points(
+            tricks_won={"p0": [], "p1": [], "p2": [], "p3": []},
+            attacker_ids={"p0"},
+            bottom_deck=bottom,
+            last_trick_winner_id="p0",
+            last_trick_cards=last_cards,
+            ctx=ctx,
+        )
+        assert pts == 8 * 5  # = 40
 
     def test_no_points_in_bottom_no_multiplier_effect(self):
         tricks_won = {"p0": [[FIVE_S]], "p1": [], "p2": [], "p3": []}

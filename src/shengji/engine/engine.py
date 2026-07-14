@@ -157,6 +157,7 @@ class GameEngine:
         state.trump_context = None
         state.current_trick = []
         state.tricks_won = {p.id: [] for p in state.players}
+        state.last_winning_play = []
         state.attacking_points = 0
         state.trick_number = 1
         state.current_leader_id = state.round_leader_id
@@ -619,6 +620,10 @@ class GameEngine:
         # Award the trick to the winner
         trick_cards = [c for _, play in state.current_trick for c in play]
         state.tricks_won[winner_id].append(trick_cards)
+        # Record the winning play — sets the bottom multiplier at round end (#57)
+        state.last_winning_play = next(
+            list(play) for pid, play in state.current_trick if pid == winner_id
+        )
 
         # Clear trick state
         state.current_trick = []
@@ -695,20 +700,15 @@ class GameEngine:
 
         # Identify last trick
         last_trick_winner_id = state.current_leader_id  # winner of last trick
-        all_tricks_flat: list[tuple[str, list[list[Card]]]] = list(state.tricks_won.items())
-        last_trick_cards: list[Card] = []
-        # Find the last trick cards by looking at the trick won by last_trick_winner_id
-        # The last trick won is the most recent entry for that player
-        if state.tricks_won.get(last_trick_winner_id):
-            last_trick_cards = state.tricks_won[last_trick_winner_id][-1]
 
-        # Count attacking points
+        # Count attacking points.  The bottom multiplier is set by the WINNING
+        # PLAY of the last trick, not the whole 4-player pile (issue #57).
         attacking_pts = count_attacking_points(
             tricks_won=state.tricks_won,
             attacker_ids=attacker_ids,
             bottom_deck=state.bottom_deck,
             last_trick_winner_id=last_trick_winner_id,
-            last_trick_cards=last_trick_cards,
+            last_trick_cards=state.last_winning_play,
             ctx=ctx,
         )
         state.attacking_points = attacking_pts

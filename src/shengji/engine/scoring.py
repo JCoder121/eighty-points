@@ -303,5 +303,7 @@ def compute_rank_advancement(
         steps = (threshold - attacking_points + step - 1) // step
         return ("defending", steps)
     else:
-        steps = (attacking_points - threshold) // step
+        # Cap at 3 per the table above (140+ is the top band); the bottom
+        # multiplier can push totals far higher and must not over-promote.
+        steps = min(3, (attacking_points - threshold) // step)
         return ("attacking", steps)

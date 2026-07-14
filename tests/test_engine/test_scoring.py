@@ -94,9 +94,12 @@ class TestComputeRankAdvancement:
     def test_140_pts_attacking_plus3(self):
         assert compute_rank_advancement(140) == ("attacking", 3)
 
-    def test_large_value_attacking(self):
-        # No cap — formula-driven
-        assert compute_rank_advancement(200) == ("attacking", 6)
+    def test_large_value_attacking_capped(self):
+        # Issue #51: capped at +3 (140+ is the top band); bottom multiplier
+        # can push totals far above 200 and must not over-promote.
+        assert compute_rank_advancement(200) == ("attacking", 3)
+        assert compute_rank_advancement(500) == ("attacking", 3)
+        assert compute_rank_advancement(100, n_decks=1) == ("attacking", 3)
 
     def test_n_equals_1_thresholds(self):
         # n=1: threshold=40, step=10

@@ -732,6 +732,65 @@ class TestIsValidFollowTractorWithPairs:
         assert not is_valid_follow([_A_H2, _A_H2, _Q_H2, _J_H2], hand, led, "trump", self.ctx)
 
 
+class TestIsValidFollowTractorPairChoice:
+    """Issue #48: which pairs satisfy a tractor follow is the player's choice.
+
+    The old validator claimed the specific HIGHEST pairs from the hand and
+    required exactly those cards, rejecting equally-legal lower pairs (and
+    disagreeing with get_legal_plays, which returns an arbitrary combination).
+    """
+
+    ctx = _CTX_HEARTS_TRUMP  # diamonds is a plain suit
+    led = _TRACTOR_2_2
+
+    @staticmethod
+    def _d(rank: Rank) -> Card:
+        return _c(Suit.DIAMONDS, rank)
+
+    def _hand(self) -> list[Card]:
+        # Diamonds: 7♦7♦ 10♦10♦ A♦A♦ K♦ 3♦ — three pairs, no tractor
+        d = self._d
+        return [
+            d(Rank.SEVEN), d(Rank.SEVEN),
+            d(Rank.TEN), d(Rank.TEN),
+            d(Rank.ACE), d(Rank.ACE),
+            d(Rank.KING), d(Rank.THREE),
+        ]
+
+    def test_any_two_pairs_valid(self):
+        hand, d = self._hand(), self._d
+        for lo, hi in [(Rank.SEVEN, Rank.TEN), (Rank.SEVEN, Rank.ACE),
+                       (Rank.TEN, Rank.ACE)]:
+            play = [d(lo), d(lo), d(hi), d(hi)]
+            assert is_valid_follow(play, hand, self.led, "diamonds", self.ctx), (
+                f"pairs {lo.value}+{hi.value} should be a legal follow"
+            )
+
+    def test_single_pair_plus_singles_invalid_when_two_pairs_held(self):
+        hand, d = self._hand(), self._d
+        play = [d(Rank.ACE), d(Rank.ACE), d(Rank.KING), d(Rank.THREE)]
+        assert not is_valid_follow(play, hand, self.led, "diamonds", self.ctx)
+
+    def test_get_legal_plays_output_always_validates(self):
+        """The legal-hint path and the validation path must agree."""
+        hand = self._hand()
+        for play in get_legal_plays(hand, self.led, "diamonds", self.ctx):
+            assert is_valid_follow(play, hand, self.led, "diamonds", self.ctx)
+
+    def test_tractor_still_required_over_separate_pairs(self):
+        """Holding a real tractor, two non-adjacent pairs are not a substitute."""
+        d = self._d
+        hand = [
+            d(Rank.SEVEN), d(Rank.SEVEN),
+            d(Rank.EIGHT), d(Rank.EIGHT),   # 7♦7♦8♦8♦ tractor
+            d(Rank.ACE), d(Rank.ACE),       # separate pair
+        ]
+        tractor_play = [d(Rank.SEVEN), d(Rank.SEVEN), d(Rank.EIGHT), d(Rank.EIGHT)]
+        split_play = [d(Rank.SEVEN), d(Rank.SEVEN), d(Rank.ACE), d(Rank.ACE)]
+        assert is_valid_follow(tractor_play, hand, self.led, "diamonds", self.ctx)
+        assert not is_valid_follow(split_play, hand, self.led, "diamonds", self.ctx)
+
+
 # ---------------------------------------------------------------------------
 # is_valid_follow — Throw (pair+single, etc.) — issue #25
 # ---------------------------------------------------------------------------

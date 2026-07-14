@@ -324,40 +324,48 @@ def _is_valid_tractor_follow(
       4. Any leftover proposed cards (the singles) are accepted freely.
     """
     needed = led.multiplicity * led.length
-    remaining = list(hand_suited)
-    required: list[Card] = []
 
-    # Step 1: tractor cards
+    # The obligation is STRUCTURAL, not card-specific: the hand determines how
+    # many tractor cards and how many additional pair cards must appear in the
+    # play, but WHICH tractor/pairs to use is the player's choice.
+    req_tractor, req_paired = _tractor_pair_capacity(hand_suited, needed, ctx)
+    got_tractor, got_paired = _tractor_pair_capacity(proposed_suited, needed, ctx)
+
+    if got_tractor < req_tractor:
+        return False
+    # Tractor cards are themselves paired, so compare total paired structure.
+    return got_tractor + got_paired >= req_tractor + req_paired
+
+
+def _tractor_pair_capacity(
+    cards: list[Card], needed: int, ctx: TrumpContext
+) -> tuple[int, int]:
+    """Return (tractor_cards, additional_pair_cards) *cards* can contribute
+    toward a tractor follow of *needed* total cards.
+
+    Greedy, largest tractor first (mirrors get_legal_plays/_match_tractor):
+    claim up to *needed* cards from tractors, then count remaining paired
+    cards (capped by the slots still open).
+    """
+    remaining = list(cards)
+    tractor_cards = 0
     for t in sorted(find_tractors(remaining, ctx), key=len, reverse=True):
-        if len(required) >= needed:
+        if tractor_cards >= needed:
             break
-        take = min(len(t), needed - len(required))
-        required.extend(t[:take])
+        take = min(len(t), needed - tractor_cards)
+        # Only whole pairs count as tractor structure
+        take -= take % 2
+        tractor_cards += take
         for c in t[:take]:
             remaining.remove(c)
 
-    # Step 2: pairs from what's left
-    if len(required) < needed:
-        by_pos: dict[tuple, list[Card]] = defaultdict(list)
-        for c in remaining:
-            by_pos[ctx.card_order(c)].append(c)
-        for pos in sorted(by_pos.keys(), reverse=True):
-            if len(required) >= needed:
-                break
-            group = by_pos[pos]
-            if len(group) >= 2:
-                take = min(len(group), needed - len(required))
-                required.extend(group[:take])
-
-    # Step 3: proposed must contain every required card
-    proposed_copy = list(proposed_suited)
-    for req_card in required:
-        if req_card not in proposed_copy:
-            return False
-        proposed_copy.remove(req_card)
-
-    # Step 4: remaining proposed cards are free-choice singles — always valid
-    return True
+    by_pos: dict[tuple, list[Card]] = defaultdict(list)
+    for c in remaining:
+        by_pos[ctx.card_order(c)].append(c)
+    paired = sum(len(g) - len(g) % 2 for g in by_pos.values())
+    paired = min(paired, needed - tractor_cards)
+    paired -= paired % 2
+    return tractor_cards, paired
 
 
 def _is_valid_throw_follow(

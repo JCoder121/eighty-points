@@ -104,6 +104,30 @@ class TestFriendRevealFlow:
         assert engine._player("p1").is_defending is True
         assert "p1" in state.revealed_friends
 
+    def test_attacking_points_reattributed_at_reveal_moment(self):
+        """Issue #43: when the friend reveals, their previously-held points
+        leave the live attacking total IMMEDIATELY (mid-trick), together
+        with the reveal — not silently at the next trick boundary."""
+        hands = {
+            "p0": [c(S, Rank.THREE), c(S, Rank.SIX)],
+            "p1": [c(S, Rank.TEN), c(S, Rank.ACE)],  # A♠ = friend card
+            "p2": [c(S, Rank.FOUR), c(S, Rank.SEVEN)],
+            "p3": [c(S, Rank.FIVE), c(S, Rank.EIGHT)],
+        }
+        engine, state, _ = _ff_playing(hands, [(c(S, Rank.ACE), 1)])
+        # Trick 1: p1 (still an attacker) wins 15 points (10♠ + 5♠).
+        engine.play_cards("p0", [c(S, Rank.THREE)])
+        engine.play_cards("p1", [c(S, Rank.TEN)])
+        engine.play_cards("p2", [c(S, Rank.FOUR)])
+        result = engine.play_cards("p3", [c(S, Rank.FIVE)])
+        assert result["trick_winner"] == "p1"
+        assert state.attacking_points == 15
+        # Trick 2: p1 leads the friend card — reveal flips them to defender,
+        # and the live total drops at that exact play, mid-trick.
+        engine.play_cards("p1", [c(S, Rank.ACE)])
+        assert engine._player("p1").is_defending is True
+        assert state.attacking_points == 0
+
     def test_ordinal_2_only_second_copy_reveals(self):
         hands = {
             "p0": [c(S, Rank.THREE)],

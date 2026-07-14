@@ -53,6 +53,10 @@ const S = {
   // Waiting for play_valid/play_invalid from server?
   awaitingValidation: false,
 
+  // Cards captured when Play was pressed (used across the check_play →
+  // confirm → validate_play → play_cards round trips).
+  pendingPlayCards: null,
+
   // Bidding state — reset when a new bid is placed or a new deal starts.
   hasPassed:     false,  // true once this player has pressed Pass this round
   lastBidsCount: 0,      // tracks gs.bids.length to detect new bids
@@ -193,6 +197,8 @@ function dispatchMessage(msg) {
     case "game_aborted": handleGameAborted(msg); break;
     case "play_valid":   handlePlayValid();      break;
     case "play_invalid": handlePlayInvalid(msg); break;
+    case "check_play_result": handleCheckPlayResult(msg); break;
+    case "throw_failed": handleThrowFailed(msg); break;
     case "last_trick_hold": handleLastTrickHold(msg); break;
     case "redeal":       handleRedeal(msg);      break;
     case "error":        handleError(msg);       break;
@@ -414,8 +420,10 @@ function handleGameAborted(msg) {
 
 function handlePlayValid() {
   S.awaitingValidation = false;
-  // Commit the validated play
-  const cards = getSelectedCards();
+  // Commit the validated play (pendingPlayCards survives re-renders that
+  // clear the visual selection).
+  const cards = S.pendingPlayCards || getSelectedCards();
+  S.pendingPlayCards = null;
   sendWS({ action: "play_cards", cards });
   S.selectedKeys.clear();
   const el = document.getElementById("play-validation-msg");
@@ -425,10 +433,92 @@ function handlePlayValid() {
 
 function handlePlayInvalid(msg) {
   S.awaitingValidation = false;
+  S.pendingPlayCards = null;
+  removeThrowConfirm();
   const reason = msg.reason || "Invalid play.";
   const el = document.getElementById("play-validation-msg");
   if (el) el.textContent = reason;
   setGameError(reason);
+}
+
+// ── Throw (甩牌) confirm flow ─────────────────────────────────────────────
+
+function handleCheckPlayResult(msg) {
+  const cards = S.pendingPlayCards;
+  if (!cards || !cards.length) {
+    S.awaitingValidation = false;
+    return;
+  }
+  if (msg.is_throw) {
+    showThrowConfirm(cards);
+  } else {
+    // Not a throw — continue with the normal validation flow.
+    sendWS({ action: "validate_play", cards });
+  }
+}
+
+function cardText(card) {
+  return `${rankDisplay(card.rank)}${SUIT_SYMBOL[card.suit] || card.suit}`;
+}
+
+function removeThrowConfirm() {
+  const bar = document.getElementById("throw-confirm-bar");
+  if (bar) bar.remove();
+}
+
+function showThrowConfirm(cards) {
+  removeThrowConfirm();
+  const area = document.getElementById("action-area");
+  if (!area) return;
+
+  const bar = document.createElement("div");
+  bar.id = "throw-confirm-bar";
+
+  const text = document.createElement("div");
+  text.className = "throw-confirm-text";
+  text.textContent =
+    `This play is a 甩牌 (throw) — if any part can be beaten, you'll be ` +
+    `forced to play the beatable part and concede 10 pts per thrown card ` +
+    `(${cards.length * 10} pts). Play it?`;
+  bar.appendChild(text);
+
+  const row = document.createElement("div");
+  row.className = "action-row";
+
+  const confirmBtn = document.createElement("button");
+  confirmBtn.textContent = "Play Throw";
+  confirmBtn.addEventListener("click", () => {
+    removeThrowConfirm();
+    sendWS({ action: "validate_play", cards });
+  });
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.addEventListener("click", () => {
+    removeThrowConfirm();
+    S.pendingPlayCards = null;
+    S.awaitingValidation = false;
+    const playBtn = document.getElementById("play-btn");
+    if (playBtn) playBtn.disabled = S.selectedKeys.size === 0;
+  });
+
+  row.appendChild(confirmBtn);
+  row.appendChild(cancelBtn);
+  bar.appendChild(row);
+  area.appendChild(bar);
+}
+
+// Broadcast to all players when a leader's throw failed and was forced down
+// to its smallest beatable component.  Mirrors the re-deal banner pattern.
+function handleThrowFailed(msg) {
+  const forced = (msg.forced_cards || []).map(cardText).join(" ");
+  const banner = document.createElement("div");
+  banner.className = "redeal-banner throw-failed-banner";
+  banner.textContent =
+    `${msg.player_name || "Player"}'s throw failed — forced to play ` +
+    `${forced}, conceding ${msg.penalty} pts to the other team.`;
+  document.body.appendChild(banner);
+  setTimeout(() => banner.remove(), 4000);
 }
 
 function handleError(msg) {
@@ -1345,8 +1435,16 @@ function renderPlayArea(area, gs) {
     if (S.selectedKeys.size === 0) { setGameError("Select cards to play."); return; }
     const cards = getSelectedCards();
     S.awaitingValidation = true;
+    S.pendingPlayCards = cards;
     playBtn.disabled = true;
-    sendWS({ action: "validate_play", cards });
+    // A multi-card LEAD may be a throw (甩牌) — ask the server to classify
+    // it first so we can show a confirm step before committing.
+    const isLeading = !(gs.current_trick || []).length;
+    if (isLeading && cards.length > 1) {
+      sendWS({ action: "check_play", cards });
+    } else {
+      sendWS({ action: "validate_play", cards });
+    }
   });
 
   const clearBtn = document.createElement("button");

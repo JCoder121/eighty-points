@@ -339,7 +339,10 @@ class GameRunner:
                     result = engine.play_cards(pid, cards)
                 except ValueError as e:
                     if leading:
-                        # Bot throw attempt rejected — legitimate; lead a single instead.
+                        # Failed throws no longer raise (the engine forces the
+                        # smallest beatable component + penalty), so this is
+                        # dead code for throws — kept as a safety net for any
+                        # other leader-side rejection.
                         cards = [self.rng.choice(player.hand)]
                         result = engine.play_cards(pid, cards)
                     else:
@@ -366,7 +369,15 @@ class GameRunner:
                                 continue
                         if result is None:
                             raise
-            self.rep.say(f"  {player.name}: {' '.join(card_str(c) for c in cards)}")
+            if result and result.get("throw_failed"):
+                self.rep.say(
+                    f"  {player.name}: THROW FAILED "
+                    f"{' '.join(card_str(c) for c in result['attempted_cards'])} "
+                    f"-> forced {' '.join(card_str(c) for c in result['forced_cards'])} "
+                    f"(penalty {result['penalty']})"
+                )
+            else:
+                self.rep.say(f"  {player.name}: {' '.join(card_str(c) for c in cards)}")
             self.rep.check(state, f"r{state.round_number} t{state.trick_number} after {pid}")
             if result["trick_complete"]:
                 self.rep.say(f"  -> trick to {result['trick_winner']} "
@@ -384,6 +395,9 @@ class GameRunner:
             self.rep.say(f"\n  ROUND RESULT: {summary['winner']} wins, "
                          f"attacking pts {summary['attacking_points']}, "
                          f"steps {summary['steps']}")
+            if summary.get("throw_penalty_adjustment"):
+                self.rep.say(f"    throw penalty adjustment: "
+                             f"{summary['throw_penalty_adjustment']:+d}")
             for rp in summary["round_players"]:
                 self.rep.say(f"    {rp['name']}: {rp['old_rank']} -> {rp['rank']}"
                              f"{'  (defending)' if rp['is_defending'] else ''}")

@@ -14,6 +14,10 @@ validate_throw(throw_cards, thrower_hand, all_hands, ctx)
     Check whether a throw lead is legal (every component must be the highest
     remaining card of its suit in the hands of non-throwing players).
 
+find_beatable_components(throw_cards, thrower_id, all_hands, ctx)
+    Detailed variant of validate_throw: return the (component, cards) pairs
+    that some single opponent can beat.  Empty list means the throw is valid.
+
 resolve_trick_winner(trick, led_suit, ctx)
     Given a list of (player_id, cards) plays, return the player_id that
     wins the trick.
@@ -507,14 +511,30 @@ def validate_throw(
     ctx:
         Current TrumpContext.
     """
+    return not find_beatable_components(throw_cards, thrower_id, all_hands, ctx)
+
+
+def find_beatable_components(
+    throw_cards: list[Card],
+    thrower_id: str,
+    all_hands: dict[str, list[Card]],
+    ctx: TrumpContext,
+) -> list[tuple[TrickFormat, list[Card]]]:
+    """Return every throw component that a single opponent can beat.
+
+    Detailed variant of validate_throw (same beat rules — see its docstring).
+    Each entry is ``(component_format, component_cards)``.  An empty list
+    means the throw is valid.  A non-Throw play always returns [].
+    """
     throw_fmt = classify_play(throw_cards, ctx)
     if not isinstance(throw_fmt, Throw):
-        return True
+        return []
 
     # Assign each component its actual cards from the throw (format-aware).
     assigned = _assign_throw_components(throw_cards, throw_fmt.components, ctx)
 
     # For each component, check if any SINGLE opponent can beat it.
+    beatable: list[tuple[TrickFormat, list[Card]]] = []
     for component, comp_cards in assigned:
         if not comp_cards:
             continue
@@ -526,9 +546,10 @@ def validate_throw(
                 continue
             opp_suited = [c for c in hand if ctx.effective_suit(c) == comp_suit]
             if _single_opp_beats_component(component, comp_strength, opp_suited, ctx):
-                return False
+                beatable.append((component, comp_cards))
+                break
 
-    return True
+    return beatable
 
 
 def _assign_throw_components(

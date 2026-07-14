@@ -8,7 +8,7 @@
 ## Where we are
 
 - **All milestones (M0–M8) are complete.** The game is playable end-to-end in the browser.
-- **553 tests passing** (pytest).
+- **580 tests passing** (pytest).
 - **Scoring:** 80 pts to win, 20 pts per rank skip (both sides, no caps).
 - **Current branch:** `main`
 - **No automated frontend tests yet.** All frontend testing is manual.
@@ -25,6 +25,7 @@
 - **No-trump mode fix:** trump-rank cards (2s) correctly treated as trump for trick-following and throw validation.
 - **Throw trick-winning:** format-matching trump required to beat a throw lead (pair for pair, single for single).
 - **Re-deal notification:** all-pass triggers a visible banner to all players before re-dealing.
+- **Failed-throw penalty (#60):** a leader's failed 甩牌 is no longer rejected — the engine forces the smallest beatable component (rest stays in hand) and the thrower concedes 10 pts/attempted card, attributed to teams at round end by FINAL teams (Find Friends reveals respected). Frontend shows a confirm dialog before any throw lead (`check_play` WS action) and a banner to all players when a throw fails.
 
 ## What's built
 

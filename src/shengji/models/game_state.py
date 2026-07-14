@@ -89,6 +89,10 @@ class GameState:
     attacking_points: int = 0
     round_number: int = 1
     trick_number: int = 1
+    # Accumulated failed-throw penalties this round (player_id → points).
+    # 10 pts per card in the attempted throw; attributed to teams at round
+    # end using FINAL teams (friend reveal can flip a thrower's team).
+    throw_penalties: dict[str, int] = field(default_factory=dict)
 
     # Bidding history
     bids: list[Bid] = field(default_factory=list)

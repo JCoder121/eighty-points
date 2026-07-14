@@ -19,7 +19,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from shengji.engine.engine import GameEngine
 from shengji.engine.logger import GameLogger
-from shengji.engine.tricks import get_legal_plays, is_valid_follow, validate_throw
+from shengji.engine.tricks import is_valid_follow
 from shengji.models.card import Card, Rank, Suit, SUITED_SUITS
 from shengji.models.friend_declaration import FriendDeclaration
 from shengji.models.game_state import GamePhase
@@ -406,8 +406,23 @@ async def handle_message(
 
             result = engine.play_cards(player_id, cards)
 
+            # On a failed throw the engine substitutes the forced component;
+            # everything downstream (log, trick snapshot) uses the cards
+            # actually played.
+            played_cards = (
+                result["forced_cards"] if result.get("throw_failed") else cards
+            )
+
             if room.logger:
-                room.logger.log_play_cards(player_id, cards, trick_num, trick_pos)
+                room.logger.log_play_cards(player_id, played_cards, trick_num, trick_pos)
+                if result.get("throw_failed"):
+                    room.logger.log_throw_penalty(
+                        player_id,
+                        result["attempted_cards"],
+                        result["forced_cards"],
+                        result["penalty"],
+                        trick_num,
+                    )
 
                 # Friend reveal detection (no-op in upgrade mode).
                 new_reveals = state.revealed_friends - revealed_before
@@ -420,7 +435,7 @@ async def handle_message(
 
                 if result.get("trick_complete"):
                     # trick_snapshot has the first 3 plays; append the 4th.
-                    trick_snapshot.append((player_id, list(cards)))
+                    trick_snapshot.append((player_id, list(played_cards)))
                     plays = [
                         {"player_id": pid, "cards": [c.to_json() for c in cs]}
                         for pid, cs in trick_snapshot
@@ -435,12 +450,25 @@ async def handle_message(
                         state.attacking_points,
                     )
 
+            # Notify everyone that the throw failed and a forced component
+            # (plus penalty) was applied.
+            if result.get("throw_failed"):
+                player_obj = engine._player(player_id)
+                await broadcast_all(room, {
+                    "type": "throw_failed",
+                    "player_id": player_id,
+                    "player_name": player_obj.name,
+                    "attempted_cards": [c.to_json() for c in result["attempted_cards"]],
+                    "forced_cards": [c.to_json() for c in result["forced_cards"]],
+                    "penalty": result["penalty"],
+                })
+
             if result.get("trick_complete"):
                 # Engine already cleared current_trick. Restore the full
                 # trick so all players can see the 4th player's cards.
                 full_trick = list(trick_snapshot)
                 if not any(pid == player_id for pid, _ in full_trick):
-                    full_trick.append((player_id, list(cards)))
+                    full_trick.append((player_id, list(played_cards)))
                 state.current_trick = full_trick
 
                 await broadcast_game_states(room)
@@ -465,6 +493,23 @@ async def handle_message(
             else:
                 await broadcast_game_states(room)
 
+        # ── Read-only play classification (throw confirm dialog) ──────────
+
+        elif action == "check_play":
+            if engine is None:
+                await send_error(room, player_id, "Game has not started yet.")
+                return
+            cards = _cards_from_json(data.get("cards", []))
+            ctx = state.trump_context
+            is_leading = len(state.current_trick) == 0
+            is_throw = False
+            if ctx is not None and is_leading and len(cards) > 1:
+                is_throw = isinstance(classify_play(cards, ctx), Throw)
+            await send_to(room, player_id, {
+                "type": "check_play_result",
+                "is_throw": is_throw,
+            })
+
         # ── Read-only play validation ──────────────────────────────────────
 
         elif action == "validate_play":
@@ -477,11 +522,10 @@ async def handle_message(
             is_leader = len(state.current_trick) == 0
             try:
                 if is_leader:
-                    led_fmt = classify_play(cards, ctx)
-                    if isinstance(led_fmt, Throw):
-                        all_hands = {p.id: p.hand for p in state.players}
-                        if not validate_throw(cards, player_id, all_hands, ctx):
-                            raise ValueError("Invalid throw: a component can be beaten by an opponent.")
+                    # Any classifiable lead is playable.  A throw with beatable
+                    # components is no longer rejected — play_cards forces the
+                    # smallest beatable component and applies a penalty.
+                    classify_play(cards, ctx)
                 else:
                     led_fmt = getattr(state, "_led_format", None)
                     led_suit = getattr(state, "_led_suit", None)

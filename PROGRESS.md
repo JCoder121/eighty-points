@@ -4,6 +4,25 @@ Newest entries at the top.
 
 ---
 
+## Session 26 — Failed-throw penalty: forced smallest component + 10 pts/card (#60)
+
+**Date:** 2026-07-14
+
+**Branch:** `feat/throw-penalty`. 580 tests passing. 100-game bot fuzz clean in both modes.
+
+### What was changed
+
+- **Engine (`tricks.py`):** `validate_throw` refactored into `find_beatable_components()` (returns the `(component, cards)` pairs a single opponent can beat); the bool API is kept as a thin wrapper.
+- **Engine (`engine.py`):** `play_cards` no longer raises on a failed throw. The leader is forced to lead the SMALLEST beatable component (fewest cards; tie-break weakest by max card_order); the rest of the attempted cards stay in hand. Penalty = 10 × attempted cards, accumulated in new `GameState.throw_penalties` (reset in `start_dealing`). Result dict gains `throw_failed` / `attempted_cards` / `forced_cards` / `penalty`.
+- **Scoring (`end_round`):** after `count_attacking_points`, penalties are attributed by FINAL teams — defender thrower → attackers gain +P; attacker thrower → −P, total clamped ≥ 0. Reported as `throw_penalty_adjustment`. Find Friends team flips (friend reveal after the throw) are therefore respected.
+- **Network (`handler.py`):** new `check_play` WS action → per-player `{"type": "check_play_result", "is_throw": bool}` (true iff Throw AND leading). Failed throws broadcast `{"type": "throw_failed", ...}` to all players and log a `throw_penalty` event. `validate_play` no longer rejects beatable throws (they are playable with consequence). Logs/trick snapshots use the actually-played (forced) cards.
+- **Logger (`logger.py`):** added `log_throw_penalty` (attempted/forced cards, penalty, trick number).
+- **Frontend (`app.js`, `index.html`):** leading with >1 selected card first sends `check_play`; if it's a throw, an inline confirm bar warns about the forced-component + 10 pts/card consequence before playing. `throw_failed` broadcasts render as a centered banner (re-deal banner pattern). Pending play cards are captured at click time (also fixes a re-render race in the old validate flow).
+- **CLI harness (`play_cli.py`):** leader ValueError fallback is now dead code for throws (comment updated, kept as safety net); verbose mode narrates forced throws and per-round penalty adjustments.
+- **Tests:** `tests/test_engine/test_throw_penalty.py` (forced substitution, smallest-component tie-break, card conservation, penalty reset, end_round attribution both directions, FF retroactive team flip, valid throws unchanged) and `tests/test_network/test_check_play.py` (check_play classification + throw_failed broadcast).
+
+---
+
 ## Session 25 — Re-deal notification on all-pass (#42)
 
 **Date:** 2026-03-21

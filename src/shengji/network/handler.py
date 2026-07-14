@@ -13,6 +13,7 @@ Key entry points
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import TYPE_CHECKING, Any
 
 from fastapi import WebSocket, WebSocketDisconnect
@@ -27,6 +28,7 @@ from shengji.models.groups import Throw, classify_play
 from shengji.modes.find_friends import FindFriendsStrategy
 from shengji.modes.upgrade import UpgradeStrategy
 from shengji.network.room import NUM_PLAYERS, Room, RoomManager
+from shengji.superuser.inspector import validate_state
 
 if TYPE_CHECKING:
     from shengji.models.bid import Bid
@@ -527,8 +529,8 @@ async def handle_message(
                     # smallest beatable component and applies a penalty.
                     classify_play(cards, ctx)
                 else:
-                    led_fmt = getattr(state, "_led_format", None)
-                    led_suit = getattr(state, "_led_suit", None)
+                    led_fmt = state.led_format
+                    led_suit = state.led_suit
                     if not is_valid_follow(cards, player_obj.hand, led_fmt, led_suit, ctx):
                         raise ValueError("That play is not legal given the led format.")
                 await send_to(room, player_id, {"type": "play_valid"})
@@ -622,10 +624,47 @@ async def handle_connection(
     try:
         while True:
             data = await ws.receive_json()
-            await handle_message(room, player_id, data, manager, deal_delay)
+            try:
+                await handle_message(room, player_id, data, manager, deal_delay)
+            except Exception as exc:  # noqa: BLE001 — containment boundary
+                # An engine/handler bug must not destroy the whole 4-player
+                # room.  Log it, tell the player, keep the game alive.
+                # ValueErrors are already handled inside handle_message.
+                logging.getLogger(__name__).exception(
+                    "Unhandled error in handle_message (room=%s, player=%s, "
+                    "action=%r)", room.room_id, player_id, data.get("action")
+                )
+                if room.logger:
+                    try:
+                        room.logger.log_error(
+                            player_id,
+                            str(data.get("action")),
+                            f"internal error: {exc}",
+                        )
+                    except Exception:
+                        pass
+                await send_error(
+                    room, player_id,
+                    "Internal server error — the action was not applied.",
+                )
+            else:
+                # M9.3 invariant sweep: after every applied action, check
+                # state consistency and log violations (never raise).
+                if room.engine is not None and room.logger:
+                    violations = validate_state(room.game_state)
+                    if violations:
+                        try:
+                            room.logger.log_error(
+                                player_id,
+                                str(data.get("action")),
+                                "invariant violations: " + "; ".join(violations),
+                            )
+                        except Exception:
+                            pass
     except WebSocketDisconnect:
         room.connections.pop(player_id, None)
         await abort_room(room, manager, "A player disconnected.")
     except Exception:
+        # Failure of the socket/loop itself (not game logic) — tear down.
         room.connections.pop(player_id, None)
         await abort_room(room, manager, "An unexpected error occurred.")

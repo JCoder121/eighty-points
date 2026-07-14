@@ -28,7 +28,7 @@ class TestMismatchedTrumpRuffFlow:
         }
         setup_playing(engine, hands, [], TR)
         engine.play_cards("p0", [c(D, Rank.TWO), c(CL, Rank.TWO)])
-        led = state._led_format
+        led = state.led_format
         assert isinstance(led, Throw)
         assert not isinstance(led, IdenticalGroup)
 

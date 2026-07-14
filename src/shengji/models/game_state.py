@@ -7,6 +7,7 @@ from typing import Literal, Optional
 from shengji.models.bid import Bid
 from shengji.models.card import Card
 from shengji.models.friend_declaration import FriendDeclaration
+from shengji.models.groups import TrickFormat
 from shengji.models.player import Player
 from shengji.models.trump import TrumpContext
 
@@ -76,6 +77,12 @@ class GameState:
     # Trick tracking
     current_trick: list[tuple[str, list[Card]]] = field(default_factory=list)
     tricks_won: dict[str, list[list[Card]]] = field(default_factory=dict)
+    # Led format/suit of the trick in progress (set by the leader's play,
+    # cleared when the trick resolves).  Previously undeclared attributes
+    # injected via setattr — now real fields so serialization and static
+    # analysis can see them.
+    led_format: Optional["TrickFormat"] = None
+    led_suit: Optional[str] = None
     # Winning play of the most recent completed trick — at round end this
     # sets the bottom-deck multiplier (issue #57).
     last_winning_play: list[Card] = field(default_factory=list)

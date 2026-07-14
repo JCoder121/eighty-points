@@ -92,7 +92,7 @@ def _play_out_round(engine, state) -> None:
         for _ in range(3):
             pid = state.current_turn_id
             options = get_legal_plays(
-                engine._player(pid).hand, state._led_format, state._led_suit,
+                engine._player(pid).hand, state.led_format, state.led_suit,
                 state.trump_context,
             )
             engine.play_cards(pid, options[0])

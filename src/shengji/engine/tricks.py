@@ -20,8 +20,6 @@ resolve_trick_winner(trick, led_suit, ctx)
 """
 from __future__ import annotations
 
-from collections import defaultdict
-
 from shengji.models.card import Card
 from shengji.models.groups import (
     Single,
@@ -31,6 +29,7 @@ from shengji.models.groups import (
     TrickFormat,
     classify_play,
     find_tractors,
+    identity_groups,
 )
 from shengji.models.trump import TrumpContext
 
@@ -158,16 +157,17 @@ def _best_suited_response(
 
 
 def _match_group(suited: list[Card], count: int, ctx: TrumpContext) -> list[Card]:
-    """Match an IdenticalGroup of *count* cards from *suited*."""
-    # Group by card_order position (same position = same tier/rank)
-    groups: dict[tuple, list[Card]] = defaultdict(list)
-    for c in suited:
-        groups[ctx.card_order(c)].append(c)
+    """Match an IdenticalGroup of *count* cards from *suited*.
 
-    # Find the largest group >= count
+    Groups are formed by exact card identity — same-strength cards of
+    different suits (off-suit trump ranks) are NOT interchangeable (#50).
+    """
+    groups = identity_groups(suited)
+
+    # Find the strongest group >= count
     best = sorted(
-        [(k, v) for k, v in groups.items() if len(v) >= count],
-        key=lambda kv: kv[0],  # highest key = strongest
+        [(ctx.card_order(v[0]), v) for v in groups.values() if len(v) >= count],
+        key=lambda kv: kv[0],
         reverse=True,
     )
     if best:
@@ -280,21 +280,19 @@ def is_valid_follow(
 
     if isinstance(led_format, IdenticalGroup):
         k = led_format.count
-        # Check if hand has a group of size >= k
-        groups: dict[tuple, list[Card]] = defaultdict(list)
-        for c in suited_in_hand:
-            groups[ctx.card_order(c)].append(c)
-        hand_has_group = any(len(v) >= k for v in groups.values())
+        # Check if hand has a group of k truly identical cards (#50)
+        hand_has_group = any(
+            len(v) >= k for v in identity_groups(suited_in_hand).values()
+        )
 
         if not hand_has_group:
             # No group of k available — any k suited cards are valid
             return True
 
         # Hand has a qualifying group — proposed must include one too
-        prop_groups: dict[tuple, list[Card]] = defaultdict(list)
-        for c in suited_in_proposed:
-            prop_groups[ctx.card_order(c)].append(c)
-        return any(len(v) >= k for v in prop_groups.values())
+        return any(
+            len(v) >= k for v in identity_groups(suited_in_proposed).values()
+        )
 
     if isinstance(led_format, Tractor):
         return _is_valid_tractor_follow(suited_in_proposed, suited_in_hand, led_format, ctx)
@@ -359,10 +357,7 @@ def _tractor_pair_capacity(
         for c in t[:take]:
             remaining.remove(c)
 
-    by_pos: dict[tuple, list[Card]] = defaultdict(list)
-    for c in remaining:
-        by_pos[ctx.card_order(c)].append(c)
-    paired = sum(len(g) - len(g) % 2 for g in by_pos.values())
+    paired = sum(len(g) - len(g) % 2 for g in identity_groups(remaining).values())
     paired = min(paired, needed - tractor_cards)
     paired -= paired % 2
     return tractor_cards, paired
@@ -410,13 +405,14 @@ def _is_valid_throw_follow(
                     remaining.remove(c)
 
             if len(comp_required) < comp_n:
-                by_pos: dict[tuple, list[Card]] = defaultdict(list)
-                for c in remaining:
-                    by_pos[ctx.card_order(c)].append(c)
-                for pos in sorted(by_pos.keys(), reverse=True):
+                id_groups = sorted(
+                    identity_groups(remaining).values(),
+                    key=lambda g: ctx.card_order(g[0]),
+                    reverse=True,
+                )
+                for group in id_groups:
                     if len(comp_required) >= comp_n:
                         break
-                    group = by_pos[pos]
                     if len(group) >= 2:
                         take = min(len(group), comp_n - len(comp_required))
                         comp_required.extend(group[:take])
@@ -428,13 +424,15 @@ def _is_valid_throw_follow(
 
         elif isinstance(comp, IdenticalGroup):
             k = comp.count
-            by_pos: dict[tuple, list[Card]] = defaultdict(list)
-            for c in hand_rem:
-                by_pos[ctx.card_order(c)].append(c)
-            for pos in sorted(by_pos.keys(), reverse=True):
-                if len(by_pos[pos]) >= k:
+            id_groups = sorted(
+                identity_groups(hand_rem).values(),
+                key=lambda g: ctx.card_order(g[0]),
+                reverse=True,
+            )
+            for group in id_groups:
+                if len(group) >= k:
                     group_obligations.append(k)
-                    for c in by_pos[pos][:k]:
+                    for c in group[:k]:
                         hand_rem.remove(c)
                     break
 
@@ -452,13 +450,14 @@ def _is_valid_throw_follow(
 
     # Check structural requirements (group components) — largest first
     for k in sorted(group_obligations, reverse=True):
-        by_pos: dict[tuple, list[Card]] = defaultdict(list)
-        for c in prop_rem:
-            by_pos[ctx.card_order(c)].append(c)
         found = False
-        for pos in sorted(by_pos.keys(), reverse=True):
-            if len(by_pos[pos]) >= k:
-                for c in by_pos[pos][:k]:
+        for group in sorted(
+            identity_groups(prop_rem).values(),
+            key=lambda g: ctx.card_order(g[0]),
+            reverse=True,
+        ):
+            if len(group) >= k:
+                for c in group[:k]:
                     prop_rem.remove(c)
                 found = True
                 break
@@ -559,17 +558,18 @@ def _assign_throw_components(
             for c in matched:
                 remaining.remove(c)
 
-    # Pass 2: IdenticalGroups — assign highest available group of sufficient size
+    # Pass 2: IdenticalGroups — assign strongest identical group of sufficient size
     for comp in components:
         if isinstance(comp, IdenticalGroup):
             k = comp.count
-            by_pos: dict[tuple, list[Card]] = defaultdict(list)
-            for c in remaining:
-                by_pos[ctx.card_order(c)].append(c)
             matched = []
-            for pos in sorted(by_pos.keys(), reverse=True):  # strongest first
-                if len(by_pos[pos]) >= k:
-                    matched = by_pos[pos][:k]
+            for group in sorted(
+                identity_groups(remaining).values(),
+                key=lambda g: ctx.card_order(g[0]),
+                reverse=True,
+            ):
+                if len(group) >= k:
+                    matched = group[:k]
                     break
             result.append((comp, matched))
             for c in matched:
@@ -604,13 +604,12 @@ def _single_opp_beats_component(
         return any(ctx.card_order(c) > comp_strength for c in opp_suited)
 
     if isinstance(component, IdenticalGroup):
+        # Opponent needs k truly IDENTICAL higher cards (#50): equal-strength
+        # off-suit trump ranks of different suits do not form a beating group.
         k = component.count
-        by_pos: dict[tuple, list[Card]] = defaultdict(list)
-        for c in opp_suited:
-            by_pos[ctx.card_order(c)].append(c)
         return any(
-            key > comp_strength and len(v) >= k
-            for key, v in by_pos.items()
+            len(v) >= k and ctx.card_order(v[0]) > comp_strength
+            for v in identity_groups(opp_suited).values()
         )
 
     if isinstance(component, Tractor):

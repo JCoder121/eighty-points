@@ -51,10 +51,27 @@ TrickFormat = Union[Single, IdenticalGroup, Tractor, Throw]
 def _position_groups(
     cards: list[Card], ctx: TrumpContext
 ) -> dict[tuple[int, int], list[Card]]:
-    """Group cards by their (tier, rank_pos) key from card_order."""
+    """Group cards by their (tier, rank_pos) key from card_order.
+
+    NOTE: position expresses STRENGTH, not identity.  All off-suit trump-rank
+    cards share one position but are different cards — never use position
+    grouping to form pairs/groups; use identity_groups for that (issue #50).
+    """
     groups: dict[tuple[int, int], list[Card]] = defaultdict(list)
     for card in cards:
         groups[ctx.card_order(card)].append(card)
+    return dict(groups)
+
+
+def identity_groups(cards: list[Card]) -> dict[tuple, list[Card]]:
+    """Group cards by exact identity (suit AND rank), including singletons.
+
+    A pair/triple/quad must consist of truly identical cards; cards that
+    merely tie in strength (e.g. 2♦ and 2♥ when 2s are trump) do NOT group.
+    """
+    groups: dict[tuple, list[Card]] = defaultdict(list)
+    for card in cards:
+        groups[(card.suit, card.rank)].append(card)
     return dict(groups)
 
 
@@ -98,8 +115,15 @@ def find_tractors(cards: list[Card], ctx: TrumpContext) -> list[list[Card]]:
     """
     pos_groups = _position_groups(cards, ctx)
 
-    # Only positions with >= 2 cards can be part of a tractor
-    pair_positions = {pos: grp for pos, grp in pos_groups.items() if len(grp) >= 2}
+    # Only positions holding a real pair (>= 2 IDENTICAL cards) can be part of
+    # a tractor.  A position may hold several identities (off-suit trump-rank
+    # cards all share one position); the pair must come from a single identity,
+    # so each position is represented by its largest identity group (#50).
+    pair_positions: dict[tuple[int, int], list[Card]] = {}
+    for pos, grp in pos_groups.items():
+        best = max(identity_groups(grp).values(), key=len)
+        if len(best) >= 2:
+            pair_positions[pos] = best
 
     if len(pair_positions) < 2:
         return []
@@ -156,18 +180,19 @@ def classify_play(cards: list[Card], ctx: TrumpContext) -> TrickFormat:
     if n == 1:
         return Single()
 
-    pos_groups = _position_groups(cards, ctx)
-
-    # All cards at the same position → identical group (pair, triple, …)
-    if len(pos_groups) == 1:
+    # All cards truly identical (same suit AND rank) → pair/triple/quad.
+    # Same-position-but-different cards (e.g. 2♦+2♥ when 2s are trump) are
+    # NOT a group — they fall through to Throw handling (issue #50).
+    if len(identity_groups(cards)) == 1:
         return IdenticalGroup(count=n)
+
+    pos_groups = _position_groups(cards, ctx)
 
     # Check for a single tractor covering all cards
     tractors = find_tractors(cards, ctx)
     if len(tractors) == 1 and len(tractors[0]) == n:
-        mult = min(len(g) for g in pos_groups.values())
         length = len(pos_groups)
-        return Tractor(multiplicity=mult, length=length)
+        return Tractor(multiplicity=n // length, length=length)
 
     # Otherwise it's a throw — decompose greedily into tractors then groups/singles
     components: list[TrickFormat] = []
@@ -179,8 +204,8 @@ def classify_play(cards: list[Card], ctx: TrumpContext) -> TrickFormat:
         for c in tractor_cards:
             remaining.remove(c)
 
-    # Classify what's left position-by-position
-    for grp in _position_groups(remaining, ctx).values():
+    # Classify what's left identity-by-identity
+    for grp in identity_groups(remaining).values():
         if len(grp) == 1:
             components.append(Single())
         else:

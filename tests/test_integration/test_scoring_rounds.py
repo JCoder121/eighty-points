@@ -13,7 +13,7 @@ from shengji.models.card import Rank
 from shengji.models.game_state import GamePhase, GameState
 from shengji.modes.upgrade import UpgradeStrategy
 
-from tests.test_integration.helpers import CL, D, H, S, c, ctx, make_state
+from tests.test_integration.helpers import D, H, S, c, ctx, make_state
 
 TR = ctx(trump_rank=Rank.TWO, trump_suit=H)
 
@@ -64,24 +64,19 @@ class TestEndRoundIntegration:
 
 
 class TestBottomMultiplierClassification:
-    def test_multiplier_classifies_whole_last_trick(self):
-        """KNOWN LIMITATION (pinned): the bottom multiplier classifies the
-        concatenated 4-player last trick, which is a Throw -> length 1 ->
-        multiplier 2, even when the winning play itself was a 2x2 tractor
-        (which alone would give 2*2 = 4x)."""
+    def test_multiplier_uses_winning_play(self):
+        """Issue #57 (fixed): the bottom multiplier is set by the WINNING
+        PLAY's largest component — a 2x2 tractor win gives 8x."""
         bottom = [c(S, Rank.KING), c(S, Rank.KING)]  # 20 pts
-        last_trick = [
-            c(H, Rank.FOUR), c(H, Rank.FOUR), c(H, Rank.FIVE), c(H, Rank.FIVE),  # winner
-            c(S, Rank.THREE), c(S, Rank.SIX), c(S, Rank.NINE), c(S, Rank.TEN),
-            c(D, Rank.THREE), c(D, Rank.SIX), c(D, Rank.NINE), c(D, Rank.TEN),
-            c(CL, Rank.THREE), c(CL, Rank.SIX), c(CL, Rank.NINE), c(CL, Rank.TEN),
+        winning_play = [
+            c(H, Rank.FOUR), c(H, Rank.FOUR), c(H, Rank.FIVE), c(H, Rank.FIVE),
         ]
         pts = count_attacking_points(
             tricks_won={"p0": [], "p1": [], "p2": [], "p3": []},
             attacker_ids={"p1"},
             bottom_deck=bottom,
             last_trick_winner_id="p1",
-            last_trick_cards=last_trick,
+            last_trick_cards=winning_play,
             ctx=TR,
         )
-        assert pts == 40  # 20 * 2x, not 20 * 4x
+        assert pts == 8 * 20  # tractor (4 cards) -> min(8, 2*4) = 8x

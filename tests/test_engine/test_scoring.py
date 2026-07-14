@@ -341,6 +341,18 @@ class TestEndRound:
         result = engine.end_round()
         assert result["game_over"] is False
 
+    def test_not_game_over_when_defender_advances_into_ace(self):
+        # Issue #52: defenders at KING who defend (+1) reach ACE but must
+        # still successfully DEFEND at Ace next round to win the game.
+        state = _make_state_in_scoring(60)  # defending +1
+        state.players[0].rank = Rank.KING  # p0/p2 defenders
+        state.players[2].rank = Rank.KING
+        engine = _make_engine(state)
+        result = engine.end_round()
+        assert engine._player("p0").rank == Rank.ACE  # advanced into Ace
+        assert result["game_over"] is False
+        assert engine.state.phase == GamePhase.ROUND_OVER
+
     def test_rank_clamped_at_ace(self):
         state = _make_state_in_scoring(0)  # defending +3
         state.players[0].rank = Rank.QUEEN  # QUEEN + 3 = ACE (not beyond)

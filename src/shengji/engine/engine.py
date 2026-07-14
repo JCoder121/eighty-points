@@ -736,12 +736,14 @@ class GameEngine:
             for p in state.players
         ]
 
-        # Check game over: defenders WIN the round and one of them is already at ACE.
-        # "attacking 0" (take over at same rank) means defenders LOST — no game over.
+        # Check game over: defenders WIN the round while ALREADY at ACE going in.
+        # Advancing INTO Ace only earns the right to defend it next round, so the
+        # check uses pre-advance ranks (issue #52).  "attacking 0" (take over at
+        # same rank) means defenders LOST — no game over.
         game_over = False
         if winner == "defending":
             for pid in defender_ids:
-                if self._player(pid).is_at_max_rank:
+                if pre_advance_ranks[pid] == Rank.ACE.value:
                     game_over = True
                     break
 

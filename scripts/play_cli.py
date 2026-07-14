@@ -160,8 +160,8 @@ class Bot:
             opts = self.lead_options(player.hand, ctx)
             weights = [3 if len(o) > 1 else 1 for o in opts]  # prefer pairs/tractors a bit
             return self.rng.choices(opts, weights=weights, k=1)[0]
-        led_fmt = getattr(state, "_led_format", None)
-        led_suit = getattr(state, "_led_suit", None)
+        led_fmt = state.led_format
+        led_suit = state.led_suit
         legal = get_legal_plays(player.hand, led_fmt, led_suit, ctx)
         if not legal:
             raise RuntimeError(
@@ -349,8 +349,8 @@ class GameRunner:
                         # get_legal_plays produced a play is_valid_follow rejects —
                         # by definition an engine inconsistency. Record and try the
                         # remaining legal options so the fuzz run can continue.
-                        led_fmt = getattr(state, "_led_format", None)
-                        led_suit = getattr(state, "_led_suit", None)
+                        led_fmt = state.led_format
+                        led_suit = state.led_suit
                         self.rep.violations.append(
                             f"[r{state.round_number} t{state.trick_number}] "
                             f"get_legal_plays/is_valid_follow disagree: {pid} "

@@ -620,13 +620,13 @@ class GameEngine:
                         hand_copy.remove(card)
                     led_fmt = classify_play(cards, ctx)
 
-            state._led_format = led_fmt  # store for followers to check against
-            state._led_suit = ctx.effective_suit(cards[0])
+            state.led_format = led_fmt  # store for followers to check against
+            state.led_suit = ctx.effective_suit(cards[0])
 
         else:
             # Follower must adhere to following rules
-            led_fmt = getattr(state, "_led_format", None)
-            led_suit = getattr(state, "_led_suit", None)
+            led_fmt = state.led_format
+            led_suit = state.led_suit
 
             if led_fmt is None or led_suit is None:
                 raise ValueError("Internal error: led format/suit not set.")
@@ -658,8 +658,8 @@ class GameEngine:
             return result
 
         # All 4 players have played — resolve the trick
-        led_suit = getattr(state, "_led_suit", ctx.effective_suit(state.current_trick[0][1][0]))
-        winner_id = resolve_trick_winner(state.current_trick, led_suit, ctx, state._led_format)
+        led_suit = state.led_suit or ctx.effective_suit(state.current_trick[0][1][0])
+        winner_id = resolve_trick_winner(state.current_trick, led_suit, ctx, state.led_format)
 
         # Award the trick to the winner
         trick_cards = [c for _, play in state.current_trick for c in play]
@@ -671,8 +671,8 @@ class GameEngine:
 
         # Clear trick state
         state.current_trick = []
-        state._led_format = None
-        state._led_suit = None
+        state.led_format = None
+        state.led_suit = None
         state.current_leader_id = winner_id
         state.current_turn_id = winner_id
         state.trick_number += 1

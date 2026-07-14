@@ -16,6 +16,7 @@ decoupled from WebSocket details.
 from __future__ import annotations
 
 import asyncio
+import random
 from typing import TYPE_CHECKING, Callable, Awaitable
 
 from shengji.engine.scoring import count_attacking_points, compute_rank_advancement
@@ -77,10 +78,12 @@ class GameEngine:
         state: GameState,
         mode_strategy: "ModeStrategy",
         deal_delay: float = DEAL_DELAY_SECONDS,
+        rng: "random.Random | None" = None,
     ) -> None:
         self.state = state
         self.mode = mode_strategy
         self.deal_delay = deal_delay
+        self.rng = rng  # deterministic deals when seeded (CLI harness, tests)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -142,7 +145,7 @@ class GameEngine:
                 "Expected WAITING, ROUND_OVER, or DEALING (re-deal)."
             )
 
-        deck = Deck()
+        deck = Deck(rng=self.rng)
         draw_pile, bottom_deck = deck.prepare_deal()
 
         state.draw_pile = list(draw_pile)

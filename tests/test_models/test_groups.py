@@ -259,13 +259,36 @@ class TestClassifyPlay:
         with pytest.raises(ValueError):
             classify_play([], self.TC)
 
-    def test_all_off_suit_trump_ranks_identical_group(self):
-        """2♠2♦2♣ off-suit trump ranks are all at the same card_order position."""
+    def test_different_off_suit_trump_ranks_not_a_pair(self):
+        """Issue #50: 2♠+2♦ tie in strength (same card_order position) but are
+        NOT identical cards, so they don't form a pair — they classify as a
+        Throw of two singles."""
         tc = ctx(Rank.TWO, H)
         cards = [c(S, Rank.TWO), c(D, Rank.TWO)]
         result = classify_play(cards, tc)
+        assert isinstance(result, Throw)
+        assert all(isinstance(comp, Single) for comp in result.components)
+
+    def test_identical_off_suit_trump_ranks_are_a_pair(self):
+        """Two copies of the SAME off-suit trump-rank card remain a real pair."""
+        tc = ctx(Rank.TWO, H)
+        cards = [c(S, Rank.TWO), c(S, Rank.TWO)]
+        result = classify_play(cards, tc)
         assert isinstance(result, IdenticalGroup)
         assert result.count == 2
+
+    def test_cross_suit_trump_rank_pairs_are_throw_not_quad(self):
+        """Issue #50: 2♦2♦+2♥2♥ (both off-suit) is two pairs at one strength
+        position — a Throw of two pairs, not a phantom quad."""
+        tc = ctx(Rank.TWO, C)
+        cards = [c(D, Rank.TWO), c(D, Rank.TWO), c(H, Rank.TWO), c(H, Rank.TWO)]
+        result = classify_play(cards, tc)
+        assert isinstance(result, Throw)
+        counts = sorted(
+            comp.count for comp in result.components
+            if isinstance(comp, IdenticalGroup)
+        )
+        assert counts == [2, 2]
 
     def test_joker_pair(self):
         result = classify_play([SJ, SJ], self.TC)

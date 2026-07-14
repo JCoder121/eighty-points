@@ -704,23 +704,56 @@ class TestIsValidFollowTractorWithPairs:
     ctx = _CTX_HEARTS_TRUMP
 
     def test_pair_required_singles_free(self):
-        """Hand has pair TWO_S/TWO_D (same card_order) + 3 singles.
+        """Hand has a real pair 2♠2♠ + 3 singles.
         Must include the pair; can choose any 2 of 3 singles."""
-        # TWO_S and TWO_D are both off-suit trump rank → same card_order (2, 0) → pair
-        hand = [_A_H2, _K_H2, _Q_H2, _TWO_S2, _TWO_D2]
+        hand = [_A_H2, _K_H2, _Q_H2, _TWO_S2, _TWO_S2]
         led = _TRACTOR_2_2
         # All combos of pair + 2 singles are valid
-        assert is_valid_follow([_TWO_S2, _TWO_D2, _A_H2, _K_H2], hand, led, "trump", self.ctx)
-        assert is_valid_follow([_TWO_S2, _TWO_D2, _A_H2, _Q_H2], hand, led, "trump", self.ctx)
-        assert is_valid_follow([_TWO_S2, _TWO_D2, _K_H2, _Q_H2], hand, led, "trump", self.ctx)
+        assert is_valid_follow([_TWO_S2, _TWO_S2, _A_H2, _K_H2], hand, led, "trump", self.ctx)
+        assert is_valid_follow([_TWO_S2, _TWO_S2, _A_H2, _Q_H2], hand, led, "trump", self.ctx)
+        assert is_valid_follow([_TWO_S2, _TWO_S2, _K_H2, _Q_H2], hand, led, "trump", self.ctx)
 
     def test_must_include_pair(self):
         """Playing 4 singles when a pair is available is invalid."""
-        hand = [_A_H2, _K_H2, _Q_H2, _TWO_S2, _TWO_D2]
+        hand = [_A_H2, _K_H2, _Q_H2, _TWO_S2, _TWO_S2]
         led = _TRACTOR_2_2
         # Omitting the pair is illegal
         assert not is_valid_follow([_A_H2, _K_H2, _Q_H2, _TWO_S2], hand, led, "trump", self.ctx)
-        assert not is_valid_follow([_A_H2, _K_H2, _Q_H2, _TWO_D2], hand, led, "trump", self.ctx)
+
+    def test_mismatched_trump_ranks_are_not_a_pair(self):
+        """Issue #50: 2♠+2♦ tie in strength but are not identical — the hand
+        holds NO pair, so any 4 trump cards are a valid degraded follow."""
+        hand = [_A_H2, _K_H2, _Q_H2, _TWO_S2, _TWO_D2]
+        led = _TRACTOR_2_2
+        assert is_valid_follow([_A_H2, _K_H2, _Q_H2, _TWO_S2], hand, led, "trump", self.ctx)
+        assert is_valid_follow([_TWO_S2, _TWO_D2, _A_H2, _K_H2], hand, led, "trump", self.ctx)
+
+
+class TestMismatchedTrumpRuff:
+    """Issue #50: two DIFFERENT off-suit trump-rank cards are not a trump pair
+    and cannot beat a real pair lead."""
+
+    ctx = _CTX_HEARTS_TRUMP  # trump rank 2, suit hearts
+
+    def _trick(self, ruff_cards):
+        k_s = _c(Suit.SPADES, Rank.KING)
+        low = _c(Suit.CLUBS, Rank.THREE)
+        return [
+            ("p0", [k_s, k_s]),                 # real pair lead in spades
+            ("p1", ruff_cards),                 # void in spades → trump attempt
+            ("p2", [low, _c(Suit.CLUBS, Rank.FOUR)]),
+            ("p3", [_c(Suit.DIAMONDS, Rank.SIX), _c(Suit.DIAMONDS, Rank.SEVEN)]),
+        ]
+
+    def test_mismatched_trump_ranks_do_not_win_pair_lead(self):
+        trick = self._trick([_TWO_S2, _TWO_D2])  # 2♠+2♦: NOT a pair
+        winner = resolve_trick_winner(trick, "spades", self.ctx, IdenticalGroup(2))
+        assert winner == "p0"  # leader keeps the trick
+
+    def test_real_trump_pair_still_ruffs(self):
+        trick = self._trick([_TWO_S2, _TWO_S2])  # identical 2♠2♠: real pair
+        winner = resolve_trick_winner(trick, "spades", self.ctx, IdenticalGroup(2))
+        assert winner == "p1"
 
     def test_exact_tractor_required_when_available(self):
         """Hand has a full tractor — must play it (or one of its valid sub-tractors)."""

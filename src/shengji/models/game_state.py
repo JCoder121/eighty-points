@@ -76,6 +76,9 @@ class GameState:
     # Trick tracking
     current_trick: list[tuple[str, list[Card]]] = field(default_factory=list)
     tricks_won: dict[str, list[list[Card]]] = field(default_factory=dict)
+    # Winning play of the most recent completed trick — at round end this
+    # sets the bottom-deck multiplier (issue #57).
+    last_winning_play: list[Card] = field(default_factory=list)
 
     # Turn / leader tracking
     current_leader_id: str = ""

@@ -24,14 +24,19 @@ def _make_single_deck() -> list[Card]:
 
 
 class Deck:
-    """Two standard Shengji decks shuffled together (108 cards)."""
+    """Two standard Shengji decks shuffled together (108 cards).
 
-    def __init__(self) -> None:
+    rng: optional random.Random for deterministic shuffles (seeded replays,
+    tests).  When None, the module-level random is used (production default).
+    """
+
+    def __init__(self, rng: random.Random | None = None) -> None:
         self._cards: list[Card] = _make_single_deck() + _make_single_deck()
+        self._rng = rng
 
     def shuffle(self) -> None:
         """Randomise card order in place."""
-        random.shuffle(self._cards)
+        (self._rng or random).shuffle(self._cards)
 
     def prepare_deal(self) -> tuple[list[Card], list[Card]]:
         """Return (draw_pile, bottom_deck) after shuffling.

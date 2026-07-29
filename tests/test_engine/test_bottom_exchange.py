@@ -1,6 +1,8 @@
 """Tests for GameEngine bottom exchange and friend declaration (M4.3)."""
 from __future__ import annotations
 
+import copy
+
 import pytest
 
 from shengji.engine.engine import GameEngine
@@ -240,3 +242,86 @@ class TestDeclareFriends:
         """Empty declarations rejected by the stub strategy."""
         with pytest.raises(ValueError, match="at least one friend"):
             self.engine.declare_friends("p0", [])
+
+
+# ---------------------------------------------------------------------------
+# exchange_bottom — rejection must not mutate (FINDING-2)
+# ---------------------------------------------------------------------------
+
+class TestExchangeBottomRejectionIsAtomic:
+    """A rejected exchange must leave the state exactly as it was.
+
+    Regression guard for FINDING-2: ``exchange_bottom`` used to run
+    ``leader.hand.extend(bottom_deck); bottom_deck = []`` *before* checking
+    that the cards to bury were actually held, so any rejection left the
+    leader holding 33 cards and the bottom deck empty.
+    """
+
+    def setup_method(self):
+        self.engine = _make_engine()
+        _deal_and_bid(self.engine)
+        self.state = self.engine.state
+        self.leader = self.engine._player("p0")
+
+    def _combined(self) -> list[Card]:
+        """The cards the leader will hold once the bottom is picked up."""
+        return list(self.leader.hand) + list(self.state.bottom_deck)
+
+    def _stranger(self) -> Card:
+        """A card identity that is nowhere in hand or bottom."""
+        combined = self._combined()
+        for suit in (Suit.SPADES, Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS):
+            for rank in (Rank.ACE, Rank.KING, Rank.QUEEN, Rank.JACK, Rank.TEN):
+                card = Card(suit=suit, rank=rank)
+                if card not in combined:
+                    return card
+        raise AssertionError("no unheld card identity available")
+
+    def test_card_not_held_leaves_state_unchanged(self):
+        before = copy.deepcopy(self.state)
+        put_back = self._combined()[:7] + [self._stranger()]
+        with pytest.raises(ValueError, match="not in the leader"):
+            self.engine.exchange_bottom("p0", put_back)
+        assert self.state == before
+
+    def test_card_not_held_does_not_pick_up_the_bottom(self):
+        put_back = self._combined()[:7] + [self._stranger()]
+        with pytest.raises(ValueError, match="not in the leader"):
+            self.engine.exchange_bottom("p0", put_back)
+        assert len(self.leader.hand) == HAND_SIZE
+        assert len(self.state.bottom_deck) == BOTTOM_SIZE
+
+    def test_fabricated_duplicate_leaves_state_unchanged(self):
+        """Burying two copies of a card the leader holds only once is rejected."""
+        combined = self._combined()
+        single = next(c for c in combined if combined.count(c) == 1)
+        rest = [c for c in combined if c != single][:6]
+        before = copy.deepcopy(self.state)
+        with pytest.raises(ValueError, match="not in the leader"):
+            self.engine.exchange_bottom("p0", [single, single] + rest)
+        assert self.state == before
+
+    def test_wrong_count_leaves_state_unchanged(self):
+        """The count check already ran before any mutation; keep it that way."""
+        before = copy.deepcopy(self.state)
+        with pytest.raises(ValueError, match="exactly 8"):
+            self.engine.exchange_bottom("p0", self._combined()[:7])
+        assert self.state == before
+
+    def test_valid_exchange_still_succeeds(self):
+        """The reordered validation must not reject a legitimate exchange."""
+        put_back = self._combined()[:BOTTOM_SIZE]
+        self.engine.exchange_bottom("p0", put_back)
+        assert len(self.leader.hand) == HAND_SIZE
+        assert self.state.bottom_deck == put_back
+
+    def test_burying_a_card_held_twice_is_allowed(self):
+        """Two genuine copies of one identity may both be buried."""
+        combined = self._combined()
+        pair = next((c for c in combined if combined.count(c) >= 2), None)
+        if pair is None:
+            pytest.skip("this deal gave the leader no duplicate identity")
+        rest = [c for c in combined if c != pair][:6]
+        self.engine.exchange_bottom("p0", [pair, pair] + rest)
+        assert len(self.leader.hand) == HAND_SIZE
+        assert self.state.bottom_deck.count(pair) == 2

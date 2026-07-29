@@ -304,21 +304,39 @@ async def handle_message(
                 return
             trump_rank = engine._player(state.round_leader_id).rank
 
+            # Optional D26 'count': how many cards to show.  Absent means
+            # auto-strongest, which is what pre-D26 clients expect.
+            requested = data.get("count")
+            if requested is not None and (
+                isinstance(requested, bool) or requested not in (1, 2)
+            ):
+                await send_error(
+                    room, player_id,
+                    f"Bid 'count' must be 1 or 2, got {requested!r}."
+                )
+                return
+
             if "suit" in data:
                 suit = Suit(data["suit"])
                 tc = Card(suit=suit, rank=trump_rank)
-                count = engine._player(player_id).hand.count(tc)
-                if count >= 2:
-                    bid_cards = [tc, tc]
-                elif count >= 1:
-                    bid_cards = [tc]
-                else:
+                held = engine._player(player_id).hand.count(tc)
+                want = requested if requested is not None else (2 if held >= 2 else 1)
+                if held < want:
                     await send_error(
                         room, player_id,
                         f"You do not hold a trump-rank {suit.value} card."
+                        if want == 1 else
+                        f"You do not hold a pair of trump-rank {suit.value} cards."
                     )
                     return
+                bid_cards = [tc] * want
             elif "joker" in data:
+                if requested == 1:
+                    await send_error(
+                        room, player_id,
+                        "A single joker is not a legal bid; joker bids are always pairs."
+                    )
+                    return
                 joker_type = data["joker"]
                 jc = Card(
                     Suit.JOKER,

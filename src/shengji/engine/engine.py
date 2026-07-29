@@ -179,6 +179,13 @@ class GameEngine:
         state.attacking_points = 0
         state.throw_penalties = {}
         state.trick_number = 1
+        # D21: friend state is round-scoped.  Leaving it in place leaks last
+        # round's declaration and revealed friend into every player view
+        # during the deal, and makes play_cards skip the live-points recompute
+        # when a repeat friend is revealed (fuzz FINDING-1).
+        state.friend_declarations = []
+        state.revealed_friends = set()
+        state.friend_play_counts = {}
         state.current_leader_id = state.round_leader_id
         state.current_turn_id = ""  # not used during dealing
 
@@ -429,10 +436,13 @@ class GameEngine:
         """The bid winner picks up the 8 bottom cards and buries 8 of their own.
 
         Flow:
-          1. Add all 8 bottom cards to the round leader's hand (33 cards total).
-          2. Player chooses 8 cards to put back as the new bottom.
-          3. Remove those 8 from hand; hand returns to HAND_SIZE (25).
-          4. Transition to FRIEND_DECLARATION (Find Friends) or PLAYING (Upgrade).
+          1. Check the 8 chosen cards against hand + bottom as one multiset.
+          2. Only then commit: hand becomes (hand + bottom) minus those 8,
+             and the 8 become the new bottom.  Hand returns to HAND_SIZE (25).
+          3. Transition to FRIEND_DECLARATION (Find Friends) or PLAYING (Upgrade).
+
+        Every check runs before any mutation, so a rejected exchange leaves the
+        state untouched rather than stranding the leader with 33 cards.
 
         Parameters
         ----------
@@ -466,21 +476,19 @@ class GameEngine:
 
         leader = self._player(player_id)
 
-        # Step 1: Pick up all bottom cards
-        leader.hand.extend(state.bottom_deck)
-        state.bottom_deck = []
-
-        # Step 2 & 3: Bury the chosen 8 cards
-        hand_copy = list(leader.hand)
+        # Step 1: Validate against the post-pickup hand without building it.
+        # What survives the removals is exactly the new hand.
+        remaining = list(leader.hand) + list(state.bottom_deck)
         for card in cards_to_put_back:
-            if card not in hand_copy:
+            if card not in remaining:
                 raise ValueError(
                     f"Card {card!r} is not in the leader's hand after picking up "
                     "the bottom deck."
                 )
-            hand_copy.remove(card)
+            remaining.remove(card)
 
-        leader.hand = hand_copy
+        # Step 2: Commit.
+        leader.hand = remaining
         state.bottom_deck = list(cards_to_put_back)
 
         # Sanity check
@@ -601,6 +609,18 @@ class GameEngine:
         throw_failure: dict | None = None
 
         if is_leader:
+            # D16: a lead is a claim about one suit.  A lead spanning two
+            # effective suits is malformed and rejected outright — this is not
+            # a throw-penalty case (R71 covers beatable single-suit throws).
+            # Checked before classification so it also catches cross-suit
+            # plays that classify as a Tractor rather than a Throw (audit F1).
+            lead_suits = {ctx.effective_suit(c) for c in cards}
+            if len(lead_suits) > 1:
+                raise ValueError(
+                    "Illegal lead: a lead must be a single suit; "
+                    f"{[str(c) for c in cards]} spans {sorted(lead_suits)}."
+                )
+
             # Leader can play any valid format
             led_fmt = classify_play(cards, ctx)
 
@@ -640,6 +660,8 @@ class GameEngine:
                     led_fmt = classify_play(cards, ctx)
 
             state.led_format = led_fmt  # store for followers to check against
+            # Order-independent: every card in the lead shares this suit (D16),
+            # and a forced component is a subset of the attempted throw.
             state.led_suit = ctx.effective_suit(cards[0])
 
         else:

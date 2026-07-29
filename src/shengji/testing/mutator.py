@@ -1,18 +1,22 @@
-"""Superuser mutator — controlled state mutations for debugging.
+"""Test fixture — controlled state mutations for deterministic setups.
+
+Not used by the server.  Tests and the CLI bot driver import these to force
+a GameState into a layout the engine would otherwise take a whole round to
+reach (specific hands, a specific bottom, a specific score).
 
 Every mutation function:
   1. Applies the change directly to the GameState.
   2. Calls validate_state() and returns any violation strings as warnings.
 
-Violations are non-fatal — the superuser may intentionally create edge
-cases for testing purposes.
+Violations are non-fatal — a fixture may intentionally build an edge case
+the engine itself would never produce.
 """
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from shengji.engine.inspector import validate_state
 from shengji.models.game_state import GamePhase
-from shengji.superuser.inspector import validate_state
 
 if TYPE_CHECKING:
     from shengji.models.card import Card

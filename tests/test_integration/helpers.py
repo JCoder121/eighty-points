@@ -2,7 +2,7 @@
 
 Unlike the unit suites (tests/test_engine, tests/test_models), these tests
 drive the real GameEngine with the real mode strategies end to end.  The
-superuser mutator is used only to force deterministic card layouts.
+fixture mutator is used only to force deterministic card layouts.
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from shengji.models.player import Player
 from shengji.models.trump import TrumpContext
 from shengji.modes.find_friends import FindFriendsStrategy
 from shengji.modes.upgrade import UpgradeStrategy
-from shengji.superuser import mutator
+from shengji.testing import mutator
 
 S, H, D, CL = Suit.SPADES, Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS
 SJ = Card(Suit.JOKER, Rank.SMALL_JOKER)

@@ -1,4 +1,4 @@
-"""Tests for superuser mutator (M6.2)."""
+"""Tests for the test-fixture mutator (testing/mutator.py, formerly M6.2)."""
 from __future__ import annotations
 
 import pytest
@@ -8,7 +8,7 @@ from shengji.models.deck import HAND_SIZE, NUM_PLAYERS, BOTTOM_SIZE
 from shengji.models.game_state import GamePhase, GameState
 from shengji.models.player import Player
 from shengji.models.trump import TrumpContext
-from shengji.superuser.mutator import (
+from shengji.testing.mutator import (
     deal_specific_hands,
     force_phase,
     set_bottom,

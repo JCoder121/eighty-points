@@ -28,8 +28,8 @@ from shengji.models.game_state import GamePhase
 from shengji.models.groups import Throw, classify_play
 from shengji.modes.find_friends import FindFriendsStrategy
 from shengji.modes.upgrade import UpgradeStrategy
-from shengji.network.room import NUM_PLAYERS, Room, RoomManager
-from shengji.superuser.inspector import validate_state
+from shengji.network.room import NUM_PLAYERS, Room, RoomManager, apply_setup
+from shengji.engine.inspector import validate_state
 
 if TYPE_CHECKING:
     from shengji.models.bid import Bid
@@ -136,16 +136,26 @@ async def broadcast_game_states(room: Room) -> None:
 
 
 async def broadcast_room_update(room: Room) -> None:
-    """Broadcast lobby state (players list, mode) to all connected players."""
+    """Broadcast lobby state (seat order, ranks, mode, resume setup).
+
+    ``players`` is in **seat order**, so its index is the seat index the
+    ``setup`` block and ``reorder_seats`` both talk about.  Each entry carries
+    the player's level so a resumed lobby can show what it is resuming to
+    without waiting for the first deal.
+    """
+    state = room.game_state
     msg = {
         "type": "room_update",
         "room_id": room.room_id,
         "game_master_id": room.game_master_id,
-        "mode": room.game_state.mode,
+        "mode": state.mode,
         "players": [
-            {"id": p.id, "name": p.name}
-            for p in room.game_state.players
+            {"id": p.id, "name": p.name, "rank": p.rank.value}
+            for p in state.players
         ],
+        "round_leader_id": state.round_leader_id,
+        "round_number": state.round_number,
+        "setup": room.setup.to_json() if room.setup else None,
     }
     await broadcast_all(room, msg)
 
@@ -171,10 +181,12 @@ async def start_and_deal(
     """
     strategy = _make_strategy(room.game_state.mode)
     room.engine = GameEngine(
-        room.game_state, strategy, deal_delay=deal_delay
+        room.game_state, strategy, deal_delay=deal_delay, rng=room.rng
     )
     if room.logger is None:
         room.logger = GameLogger()
+        if room.setup is not None:
+            room.logger.log_resume_setup(room.setup.to_json(), room.game_state)
     room.engine.start_dealing()
     room.passed_in_bidding.clear()
     room.players_who_passed.clear()
@@ -293,6 +305,41 @@ async def handle_message(
                 and state.phase == GamePhase.WAITING
             ):
                 asyncio.create_task(start_and_deal(room, manager, deal_delay))
+
+        elif action == "reorder_seats":
+            # Seat order is load-bearing in Upgrade — seats 0/2 partner against
+            # 1/3 — so resuming a game needs the host to rebuild the old table
+            # rather than relying on join order.
+            if player_id != room.game_master_id:
+                await send_error(room, player_id, "Only the game master can reorder seats.")
+                return
+            if state.phase != GamePhase.WAITING:
+                await send_error(
+                    room, player_id,
+                    "Seats can only be reordered before the game starts."
+                )
+                return
+            order = data.get("order")
+            if not isinstance(order, list) or not all(
+                isinstance(pid, str) for pid in order
+            ):
+                await send_error(room, player_id, "'order' must be a list of player ids.")
+                return
+            current_ids = [p.id for p in state.players]
+            if sorted(order) != sorted(current_ids):
+                await send_error(
+                    room, player_id,
+                    "'order' must list every player in the room exactly once."
+                )
+                return
+            by_id = {p.id: p for p in state.players}
+            state.players = [by_id[pid] for pid in order]
+            # Ranks and the leading seat are configured per seat, so a reorder
+            # re-homes them.
+            if room.setup is not None:
+                apply_setup(state, room.setup)
+            await broadcast_room_update(room)
+            await broadcast_game_states(room)
 
         # ── Bidding ──────────────────────────────────────────────────────
 

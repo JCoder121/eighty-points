@@ -3,7 +3,7 @@
 Every engine action in a full game is followed by an independent re-derivation
 of card conservation, zone exclusivity, turn/phase coherence, points
 bookkeeping and (at round end) the scoring/advancement table.  Nothing here
-trusts ``superuser.inspector.validate_state``: it is run as a *second* opinion
+trusts ``engine.inspector.validate_state``: it is run as a *second* opinion
 alongside the checks, so a bug in the inspector cannot mask a bug in the
 engine.
 

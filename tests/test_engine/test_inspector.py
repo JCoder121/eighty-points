@@ -1,4 +1,4 @@
-"""Tests for superuser inspector (M6.1)."""
+"""Tests for the core invariant checker (engine/inspector.py, formerly M6.1)."""
 from __future__ import annotations
 
 import pytest
@@ -8,8 +8,8 @@ from shengji.models.deck import HAND_SIZE, NUM_PLAYERS, BOTTOM_SIZE
 from shengji.models.game_state import GamePhase, GameState
 from shengji.models.player import Player
 from shengji.models.trump import TrumpContext
-from shengji.superuser import mutator
-from shengji.superuser.inspector import get_full_state, validate_state
+from shengji.testing import mutator
+from shengji.engine.inspector import get_full_state, validate_state
 
 
 # ---------------------------------------------------------------------------

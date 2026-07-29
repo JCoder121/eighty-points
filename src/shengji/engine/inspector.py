@@ -1,7 +1,9 @@
-"""Superuser inspector — read-only game state inspection and validation.
+"""Core invariant checker — read-only game state inspection and validation.
 
-All functions here are pure (no side effects) and operate directly on a
-GameState.  They are safe to call at any time during a game session.
+``validate_state`` runs in production after every applied WebSocket action
+(``network/handler.py``), in the fuzz suite, and in the CLI bot driver.  All
+functions here are pure (no side effects) and operate directly on a
+GameState, so they are safe to call at any time during a game session.
 """
 from __future__ import annotations
 
@@ -60,7 +62,8 @@ def validate_state(state: "GameState") -> list[str]:
     """Inspect *state* and return a list of violation strings.
 
     An empty list means the state looks consistent.  Violations are
-    informational — the superuser may intentionally create edge cases.
+    informational — callers log them, never raise on them, because a test
+    fixture may intentionally build an edge case.
 
     Checks performed
     ----------------

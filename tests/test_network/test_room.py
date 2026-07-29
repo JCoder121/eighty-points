@@ -193,11 +193,11 @@ class TestRoomDefaults:
         room = m.get_room(room_id)
         assert room.connections == {}
 
-    def test_superuser_disabled_by_default(self):
+    def test_setup_is_none_by_default(self):
         m = _manager()
         room_id, _ = m.create_room("Alice")
         room = m.get_room(room_id)
-        assert room.superuser_enabled is False
+        assert room.setup is None
 
     def test_passed_in_bidding_empty(self):
         m = _manager()

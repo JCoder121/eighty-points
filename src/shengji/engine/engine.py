@@ -413,7 +413,11 @@ class GameEngine:
 
         # Winning bid is the last entry in the bid history.
         winning_bid = state.bids[-1]
-        if state.round_number == 1:
+        # R11: in an ordinary round 1 there is no leader yet, so the winning
+        # bidder becomes one.  R18: from round 2 on — and in a resumed game,
+        # whose leader was configured in the lobby — leadership is already
+        # settled and the bid fixes only the trump suit.
+        if state.round_number == 1 and not state.leader_predetermined:
             state.round_leader_id = winning_bid.player_id
         state.current_leader_id = state.round_leader_id
         state.trump_context = winning_bid.resulting_trump

@@ -465,3 +465,17 @@ only Jeffrey can make about his own table.
    pattern to copy if you want consensus.
 4. **All-hands visibility.** Is the game master seeing every hand something you want available at
    all, given there is no UI for it today and enabling it is invisible to the other three players?
+
+---
+
+## 6. Jeffrey's rulings (2026-07-29 interview)
+
+1. **Replace superuser with first-class features** — delete the HTTP layer + lobby toggle;
+   keep `inspector.validate_state` (rename out of superuser) and `mutator` as an in-process
+   test fixture.
+2. **Resume scope: between rounds only** — lobby setup takes starting ranks + leader +
+   round number; no mid-round persistence.
+3. **Seating: seat-reorder control in the lobby** (host assigns seats before starting),
+   not rejoin-in-order.
+4. **Rewind: build it, game-master-authorized alone** (design (a), round-start snapshots).
+   Queued after resume-at-levels.

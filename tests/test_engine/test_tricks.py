@@ -952,7 +952,7 @@ class TestThrowComponentAssignmentIsTotal:
     A component can only end up with zero cards when the play holds more than
     two copies of one identity, which R1 makes impossible (the game is exactly
     two decks).  A 1.27M-throw search over legal multisets found zero cases;
-    the only way in is the superuser mutator.  The old code skipped such a
+    the only way in is the fixture mutator.  The old code skipped such a
     component's beat check silently, so ``validate_throw`` would approve a
     throw whose largest component an opponent could beat outright.
     """

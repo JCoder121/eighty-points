@@ -1,5 +1,5 @@
 """Malformed-input rejection plus full deterministic rounds with state
-invariants (card conservation, superuser validation) checked after every play.
+invariants (card conservation, validate_state) checked after every play.
 """
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from shengji.models.card import RANK_ORDER, SUITED_SUITS, Card, Rank
 from shengji.models.deck import TOTAL_CARDS
 from shengji.models.friend_declaration import FriendDeclaration
 from shengji.models.game_state import GamePhase, GameState
-from shengji.superuser import inspector
+from shengji.engine import inspector
 
 from tests.test_integration.helpers import BJ, D, S, SJ, c, ctx, make_engine, setup_playing
 

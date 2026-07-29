@@ -8,7 +8,7 @@ Two things live here:
    ``random.Random(seed)`` so any failure is reproducible from its seed.
 
 2. An **independent invariant battery** (:func:`check_invariants` and
-   friends).  These deliberately do NOT call ``superuser.inspector.validate_state``
+   friends).  These deliberately do NOT call ``engine.inspector.validate_state``
    — they re-derive card conservation, turn/phase coherence, points
    bookkeeping and round-end scoring from the raw GameState so that a bug in
    ``validate_state`` cannot mask a bug in the engine.  The driver runs
@@ -40,7 +40,7 @@ from shengji.models.groups import Throw, classify_play, find_tractors
 from shengji.models.player import Player
 from shengji.modes.find_friends import FindFriendsStrategy
 from shengji.modes.upgrade import UpgradeStrategy
-from shengji.superuser.inspector import validate_state
+from shengji.engine.inspector import validate_state
 
 MODES = ("upgrade", "find_friends")
 

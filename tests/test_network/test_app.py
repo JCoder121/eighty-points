@@ -123,46 +123,12 @@ class TestJoinRoom:
 
 
 # ---------------------------------------------------------------------------
-# Superuser endpoints accessible via the app (adapter integration)
+# The /superuser HTTP layer was deleted (2026-07-29 assessment §6 ruling 1).
+# Nothing replaces it: there is no route that reveals another player's hand.
 # ---------------------------------------------------------------------------
 
-class TestSuperuserAdapter:
-    def _setup(self, client: TestClient, manager: RoomManager) -> tuple[str, str]:
-        resp = client.post("/rooms", json={"name": "GM"})
-        d = resp.json()
-        return d["room_id"], d["player_id"]
-
-    def test_enable_superuser_via_app(self):
-        client, manager = _client()
-        room_id, gm_id = self._setup(client, manager)
-        resp = client.post(
-            f"/superuser/enable/{room_id}",
-            headers={"X-Player-Id": gm_id},
-        )
-        assert resp.status_code == 200
-        # Flag propagated to main Room
-        room = manager.get_room(room_id)
-        assert room.superuser_enabled is True
-
-    def test_superuser_state_reflects_live_game_state(self):
-        client, manager = _client()
-        room_id, gm_id = self._setup(client, manager)
-        # Enable superuser
-        client.post(f"/superuser/enable/{room_id}", headers={"X-Player-Id": gm_id})
-        # Mutate game state directly
-        manager.get_room(room_id).game_state.attacking_points = 42
-        resp = client.get(
-            f"/superuser/state/{room_id}",
-            headers={"X-Player-Id": gm_id},
-        )
-        assert resp.status_code == 200
-        assert resp.json()["attacking_points"] == 42
-
-    def test_non_gm_cannot_enable_via_app(self):
-        client, manager = _client()
-        room_id, _ = self._setup(client, manager)
-        resp = client.post(
-            f"/superuser/enable/{room_id}",
-            headers={"X-Player-Id": "hacker"},
-        )
-        assert resp.status_code == 403
+def test_no_superuser_routes_are_mounted():
+    client, _ = _client()
+    room_id = client.post("/rooms", json={"name": "GM"}).json()["room_id"]
+    assert client.post(f"/superuser/enable/{room_id}").status_code == 404
+    assert client.get(f"/superuser/state/{room_id}").status_code == 404

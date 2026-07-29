@@ -2,11 +2,10 @@
 
 Routes
 ------
-POST  /rooms                    — create a room
+POST  /rooms                    — create a room (optionally with resume setup)
 POST  /rooms/{room_id}/join     — join an existing room
 WS    /ws/{room_id}/{player_id} — main game WebSocket
 GET   /                         — health check
-Mounted: /superuser/…           — superuser debug endpoints (M6)
 Static:  /                      — frontend HTML/JS
 
 Usage
@@ -25,8 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from shengji.network.handler import handle_connection
-from shengji.network.room import RoomManager
-from shengji.superuser.api import SuperuserRoom
+from shengji.network.room import RoomManager, RoomSetup
 
 # Seconds between dealt cards in production.  Override to 0 in tests.
 DEAL_DELAY_SECONDS: float = 0.25
@@ -38,87 +36,17 @@ DEAL_DELAY_SECONDS: float = 0.25
 
 class CreateRoomBody(BaseModel):
     name: str
+    # Optional resume configuration; validated by RoomSetup.from_json.
+    # Left untyped here so a malformed payload produces our own 400 with a
+    # readable message rather than pydantic's field-path error dump.
+    setup: dict | None = None
+    # Optional RNG seed: deterministic deals for the whole session (the same
+    # seed replays the same sequence of hands round after round).
+    seed: int | None = None
 
 
 class JoinRoomBody(BaseModel):
     name: str
-
-
-# ---------------------------------------------------------------------------
-# Superuser room adapter
-# ---------------------------------------------------------------------------
-
-class _LiveSuperuserRoom:
-    """Proxy that exposes the SuperuserRoom interface backed by a live Room.
-
-    The M6 enable endpoint mutates ``room.superuser_enabled = True`` on
-    whatever object ``rooms.get(room_id)`` returns.  Returning a plain copy
-    (SuperuserRoom dataclass) would discard that write.  This proxy forwards
-    attribute access — including the ``superuser_enabled`` setter — directly
-    to the underlying Room so changes are immediately visible in the manager.
-    """
-
-    __slots__ = ("_room",)
-
-    def __init__(self, real_room) -> None:  # real_room: Room
-        object.__setattr__(self, "_room", real_room)
-
-    @property
-    def room_id(self) -> str:
-        return self._room.room_id
-
-    @property
-    def game_master_id(self) -> str:
-        return self._room.game_master_id
-
-    @property
-    def game_state(self):
-        return self._room.game_state
-
-    @property
-    def superuser_enabled(self) -> bool:
-        return self._room.superuser_enabled
-
-    @superuser_enabled.setter
-    def superuser_enabled(self, value: bool) -> None:
-        self._room.superuser_enabled = value
-
-
-class _SuperuserRoomAdapter(dict):
-    """A dict-like store that proxies SuperuserRoom lookups to RoomManager.
-
-    The M6 superuser router was designed to work with a plain dict
-    ``{room_id: SuperuserRoom}``.  This adapter fulfills that interface while
-    delegating actual room data to the authoritative RoomManager — so the
-    superuser API always sees the live GameState without any synchronisation.
-    """
-
-    def __init__(self, manager: RoomManager) -> None:
-        super().__init__()
-        self._manager = manager
-
-    def __contains__(self, room_id: object) -> bool:  # type: ignore[override]
-        return self._manager.get_room(str(room_id)) is not None
-
-    def get(self, room_id: object, default=None):  # type: ignore[override]
-        room = self._manager.get_room(str(room_id))
-        if room is None:
-            return default
-        # Return a live proxy so attribute mutations (e.g. superuser_enabled)
-        # write through directly to the authoritative Room object.
-        return _LiveSuperuserRoom(room)
-
-    def __getitem__(self, room_id: str):
-        result = self.get(room_id)
-        if result is None:
-            raise KeyError(room_id)
-        return result
-
-    def __setitem__(self, room_id: str, value) -> None:
-        # Safety valve: if any code path does rooms[id] = room, propagate flag.
-        room = self._manager.get_room(room_id)
-        if room is not None:
-            room.superuser_enabled = value.superuser_enabled
 
 
 # ---------------------------------------------------------------------------
@@ -157,9 +85,26 @@ def create_app(
 
     @app.post("/rooms")
     async def create_room(body: CreateRoomBody) -> dict:
-        """Create a new room.  The creator becomes the game master."""
-        room_id, player_id = manager.create_room(body.name)
-        return {"room_id": room_id, "player_id": player_id}
+        """Create a new room.  The creator becomes the game master.
+
+        An optional ``setup`` block resumes a previous session: it fixes each
+        seat's starting level, which seat leads the first round, and the round
+        number to display.  See ``RoomSetup``.
+        """
+        setup = None
+        if body.setup is not None:
+            try:
+                setup = RoomSetup.from_json(body.setup)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc))
+        room_id, player_id = manager.create_room(
+            body.name, setup=setup, seed=body.seed
+        )
+        return {
+            "room_id": room_id,
+            "player_id": player_id,
+            "setup": setup.to_json() if setup else None,
+        }
 
     @app.post("/rooms/{room_id}/join")
     async def join_room(room_id: str, body: JoinRoomBody) -> dict:
@@ -175,12 +120,6 @@ def create_app(
     @app.websocket("/ws/{room_id}/{player_id}")
     async def ws_endpoint(ws: WebSocket, room_id: str, player_id: str) -> None:
         await handle_connection(ws, room_id, player_id, manager, deal_delay)
-
-    # ── Superuser routes ─────────────────────────────────────────────────────
-    # Use the adapter so M6's router always sees live GameState.
-    from shengji.superuser.api import create_router as create_superuser_router
-    su_rooms = _SuperuserRoomAdapter(manager)
-    app.include_router(create_superuser_router(su_rooms))
 
     # ── Static files (frontend) ───────────────────────────────────────────────
 

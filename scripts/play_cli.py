@@ -12,7 +12,7 @@ Usage
   python scripts/play_cli.py --bots --games 200        # fuzz seeds 0..199, report failures
   python scripts/play_cli.py --bots --mode find_friends --games 50
 
-Every engine action is followed by a superuser validate_state() sweep;
+Every engine action is followed by a validate_state() sweep;
 violations are reported with the seed / round / trick needed to reproduce.
 """
 from __future__ import annotations
@@ -33,7 +33,7 @@ from shengji.models.groups import Throw, classify_play, find_tractors
 from shengji.models.player import Player
 from shengji.modes.find_friends import FindFriendsStrategy
 from shengji.modes.upgrade import UpgradeStrategy
-from shengji.superuser.inspector import validate_state
+from shengji.engine.inspector import validate_state
 
 MAX_REDEALS = 10
 

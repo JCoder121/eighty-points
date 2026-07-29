@@ -91,6 +91,12 @@ class GameState:
     current_leader_id: str = ""
     round_leader_id: str = ""
     current_turn_id: str = ""
+    # True when round_leader_id was fixed up front instead of being decided by
+    # round-1 bidding — i.e. a resumed game (network.room.apply_setup).  From
+    # round 2 on the leader is always predetermined and this flag is moot; it
+    # exists so a resumed round 1 gets round-2+ semantics (R18: the winning
+    # bid fixes the trump suit only, never leadership).
+    leader_predetermined: bool = False
 
     # Scoring
     attacking_points: int = 0

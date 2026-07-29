@@ -61,6 +61,22 @@ class GameLogger:
     # Event methods
     # ------------------------------------------------------------------
 
+    def log_resume_setup(self, setup: dict, state: "GameState") -> None:
+        """Record that this game started from a lobby resume configuration.
+
+        Written once, before the first round, so a log that opens at round 7
+        with players at K explains itself.
+        """
+        self._write({
+            "event": "resume_setup",
+            "setup": setup,
+            "round_leader_id": state.round_leader_id,
+            "players": [
+                {"seat": i, "id": p.id, "name": p.name, "rank": p.rank.value}
+                for i, p in enumerate(state.players)
+            ],
+        })
+
     def log_round_start(self, state: "GameState") -> None:
         """Full state snapshot after dealing completes (all hands dealt, before bidding)."""
         self._write({

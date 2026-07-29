@@ -30,7 +30,7 @@
   throw-tractor follows · D26 explicit single bids (WS `bid` action takes optional `count`;
   **frontend UI for count=1 not built yet**) · D19/D24/D25 confirmed current behavior.
   Also: exchange_bottom validates before mutating; FF reveal counters moved onto GameState.
-- **Scoring:** 80 pts to win, 20-pt bands; attacking advancement capped at +3 (#51); defending shutout +4. Game over only when defending while ALREADY at Ace (#52). Bottom multiplier = 2× winning play's largest component, capped 8× — single 2×, pair 4×, tractor 8× (#57).
+- **Scoring:** 80 pts to win, 20-pt bands (width re-confirmed 2026-07-29, D27); attacking advancement capped at +3 (#51); defending shutout +4 for 1-19 pts, **+5 on a true zero** (D28, 2026-07-29). Game over only when defending while ALREADY at Ace (#52). Bottom multiplier = 2× winning play's largest component, capped 8× — single 2×, pair 4×, tractor 8× (#57).
 - **Pairs require identical cards (#50):** equal-strength off-suit trump-rank cards (e.g. 2♦+2♣) no longer form phantom pairs/quads — grouping is by identity everywhere (classify, follow validation, tractors, throw checks); strength/tie rules unchanged.
 - **Seeded terminal harness:** `python scripts/play_cli.py` — interactive play (all seats or `--human N`) and `--bots --games N` fuzzer with per-action `validate_state` sweep. Deck/GameEngine accept an injectable `random.Random`. Run the fuzzer after any engine change.
 - **Handler hardening:** a non-ValueError bug in message handling no longer destroys the room (contained + logged + per-player error); `validate_state` runs after every action with violations logged; `led_format`/`led_suit` are declared GameState fields.

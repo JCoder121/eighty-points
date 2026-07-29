@@ -528,7 +528,8 @@ The sum of all adjustments is applied at once and the result is clamped at 0 (R6
 
 | attacking_points | winner | levels gained |
 |---|---|---|
-| 0-19 | defending | +4 |
+| exactly 0 | defending | +5 (true shutout, D28) |
+| 1-19 | defending | +4 |
 | 20-39 | defending | +3 |
 | 40-59 | defending | +2 |
 | 60-79 | defending | +1 |
@@ -537,10 +538,12 @@ The sum of all adjustments is applied at once and the result is clamped at 0 (R6
 | 120-139 | attacking | +2 |
 | 140 and above | attacking | +3 (hard cap) |
 
-Formally: if `points < 80`, defending wins with `steps = ceil((80 - points) / 20)`; else
-attacking wins with `steps = min(3, (points - 80) // 20)`.
+Formally: if `points < 80`, defending wins with `steps = ceil((80 - points) / 20)`, plus 1
+more when `points == 0` (D28); else attacking wins with `steps = min(3, (points - 80) // 20)`.
 *Source:* on-record Session 23 bands + cap #51 (which override robertying's "0 points →
-defending +3"). *Engine:* `engine/scoring.py:115-152`.
+defending +3"); band width 20 re-confirmed by Jeffrey 2026-07-29 (house-rules checklist C1 —
+the remembered "10" is the per-deck step constant, 10 × n_decks); true-shutout +5 ruled
+2026-07-29 (C3 follow-up). *Engine:* `engine/scoring.py`.
 
 **R77** — Only the winning team advances, and every member of the winning team advances by the
 same number of levels. In Find Friends, a revealed friend advances with the leader; an
@@ -642,6 +645,21 @@ for full analysis). D16-D18, D20, D21 are **behavior changes** pending implement
   invariant. (Q6; changes R32 bookkeeping)
 - **D07 (confirmed)** — Q7 ruled to keep judging throws against all three other hands,
   partner included; D07 is now an on-record decision, not an engine accident.
+
+House-rules checklist interview (2026-07-29, docs/reports/2026-07-29-house-rules-checklist.md):
+
+- **D27** — Band width **20 points confirmed** (checklist C1). Jeffrey's remembered "10 per
+  level skip" is the per-deck step constant (step = 10 × n_decks); the 2-deck game uses 20.
+  No change. (confirms R76)
+- **D28** — **True shutout bonus**: attackers captured exactly 0 points → defenders +5
+  (one extra rank on top of the 0-19 band's +4, which now covers 1-19). Implemented
+  2026-07-29. (changes R76)
+- **D15 (ratified)** — checklist C2: a defender winning the last trick means the bottom
+  scores for nobody — confirmed as the house rule, no longer only an engine position.
+- **D11 (ratified)** — checklist C5: the trump-suit ban on Find Friends friend cards is
+  intended.
+- **#51 cap (ratified)** — checklist C3 follow-up: attacking advancement caps at +3 (140+);
+  the takeover itself is the extra reward.
 
 Decisions D22-D26 were ruled in the Phase 4 interview (2026-07-29), consolidating the audit /
 matrix / fuzz findings (see `docs/reports/2026-07-29-consolidated-findings.md`):

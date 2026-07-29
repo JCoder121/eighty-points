@@ -337,8 +337,10 @@ def check_invariants(
 #: docstring rather than from its code.
 def expected_advancement(points: int) -> tuple[str, int]:
     if points < 80:
-        # 0-19 -> 4, 20-39 -> 3, 40-59 -> 2, 60-79 -> 1
-        return ("defending", (80 - points + 19) // 20)
+        # exactly 0 -> 5 (true shutout, D28); 1-19 -> 4, 20-39 -> 3,
+        # 40-59 -> 2, 60-79 -> 1
+        steps = (80 - points + 19) // 20
+        return ("defending", steps + 1 if points == 0 else steps)
     # 80-99 -> 0, 100-119 -> 1, 120-139 -> 2, 140+ -> 3 (capped)
     return ("attacking", min(3, (points - 80) // 20))
 

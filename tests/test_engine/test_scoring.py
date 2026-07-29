@@ -41,8 +41,9 @@ class TestComputeRankAdvancement:
 
     # --- Defending side (< 80) ---
 
-    def test_zero_pts_defending_plus4(self):
-        assert compute_rank_advancement(0) == ("defending", 4)
+    def test_zero_pts_defending_plus5_true_shutout(self):
+        # D28 (2026-07-29): exactly 0 is a special case — one extra rank.
+        assert compute_rank_advancement(0) == ("defending", 5)
 
     def test_one_pt_defending_plus4(self):
         assert compute_rank_advancement(1) == ("defending", 4)
@@ -103,7 +104,8 @@ class TestComputeRankAdvancement:
 
     def test_n_equals_1_thresholds(self):
         # n=1: threshold=40, step=10
-        assert compute_rank_advancement(0, n_decks=1) == ("defending", 4)
+        assert compute_rank_advancement(0, n_decks=1) == ("defending", 5)  # D28
+        assert compute_rank_advancement(5, n_decks=1) == ("defending", 4)
         assert compute_rank_advancement(10, n_decks=1) == ("defending", 3)
         assert compute_rank_advancement(20, n_decks=1) == ("defending", 2)
         assert compute_rank_advancement(30, n_decks=1) == ("defending", 1)
@@ -314,18 +316,19 @@ class TestEndRound:
         result = engine.end_round()
         assert result["attacking_points"] == 10
 
-    def test_zero_pts_defending_wins_plus4(self):
+    def test_zero_pts_defending_wins_plus5(self):
+        # D28: true shutout is +5.
         engine = _make_engine(_make_state_in_scoring(0))
         result = engine.end_round()
         assert result["winner"] == "defending"
-        assert result["steps"] == 4
+        assert result["steps"] == 5
 
     def test_defender_rank_advances_on_win(self):
-        engine = _make_engine(_make_state_in_scoring(0))  # defending +4
+        engine = _make_engine(_make_state_in_scoring(0))  # defending +5 (D28)
         engine.end_round()
-        # Defenders are p0 and p2; both should be at rank SIX (TWO + 4 = SIX)
-        assert engine._player("p0").rank == Rank.SIX
-        assert engine._player("p2").rank == Rank.SIX
+        # Defenders are p0 and p2; both should be at rank SEVEN (TWO + 5)
+        assert engine._player("p0").rank == Rank.SEVEN
+        assert engine._player("p2").rank == Rank.SEVEN
 
     def test_attacker_rank_advances_on_win(self):
         # 100 pts: threshold=80, step=20 → (100-80)//20 = 1 → attacking +1
@@ -350,7 +353,7 @@ class TestEndRound:
         assert engine.state.phase == GamePhase.ROUND_OVER
 
     def test_game_over_when_defender_at_ace_and_defends(self):
-        state = _make_state_in_scoring(0)  # defending +3 → but clamps at ACE
+        state = _make_state_in_scoring(0)  # defending +5 (D28) → clamps at ACE
         # Put defenders at ACE already
         state.players[0].rank = Rank.ACE  # p0 is defender
         state.players[2].rank = Rank.ACE  # p2 is defender
@@ -379,8 +382,8 @@ class TestEndRound:
         assert engine.state.phase == GamePhase.ROUND_OVER
 
     def test_rank_clamped_at_ace(self):
-        state = _make_state_in_scoring(0)  # defending +3
-        state.players[0].rank = Rank.QUEEN  # QUEEN + 3 = ACE (not beyond)
+        state = _make_state_in_scoring(0)  # defending +5 (D28)
+        state.players[0].rank = Rank.QUEEN  # QUEEN + 5 clamps to ACE
         state.players[2].rank = Rank.QUEEN
         engine = _make_engine(state)
         engine.end_round()

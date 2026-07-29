@@ -12,7 +12,8 @@ count_attacking_points(...)
 
 compute_rank_advancement(attacking_points, n_decks)
     Return (winner, steps).  For n_decks=2: threshold 80, 20-point bands.
-    0-19 defending +4 | 20-39 +3 | 40-59 +2 | 60-79 +1 |
+    exactly 0 defending +5 (true shutout, D28) | 1-19 +4 | 20-39 +3 |
+    40-59 +2 | 60-79 +1 |
     80-99 attacking +0 (take over) | 100-119 +1 | 120-139 +2 | 140+ +3 (cap).
 
 The authoritative table is the one implemented below (settled Session 23,
@@ -126,7 +127,8 @@ def compute_rank_advancement(
     Threshold table (threshold = 40 * n_decks = 80; step = 10 * n_decks = 20):
       attacking_points      winner       steps
       ──────────────────────────────────────────
-      0  to 19              defending    4
+      exactly 0             defending    5   (true shutout, D28)
+      1  to 19              defending    4
       20 to 39              defending    3
       40 to 59              defending    2
       60 to 79              defending    1
@@ -144,6 +146,10 @@ def compute_rank_advancement(
 
     if attacking_points < threshold:
         steps = (threshold - attacking_points + step - 1) // step
+        if attacking_points == 0:
+            # D28 (2026-07-29): a TRUE shutout — attackers captured nothing —
+            # is a special case worth one extra rank on top of the 0-19 band.
+            steps += 1
         return ("defending", steps)
     else:
         # Cap at 3 per the table above (140+ is the top band); the bottom

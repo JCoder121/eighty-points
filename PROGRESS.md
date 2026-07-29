@@ -4,6 +4,25 @@ Newest entries at the top.
 
 ---
 
+## Session 27c — House-rules checklist interview → D27/D28
+
+**Date:** 2026-07-29
+
+House-rules audit (`docs/reports/2026-07-29-house-rules-checklist.md`) + interview:
+
+- **D27** — band width **confirmed 20** (Jeffrey's remembered "10 per level skip" is the
+  per-deck constant: step = 10 × n_decks). No change.
+- **D28 (implemented)** — **true shutout = defenders +5**: attackers captured exactly 0 →
+  one extra rank on top of the 0-19 band (which now covers 1-19 at +4). Lockstep:
+  `engine/scoring.py` (+ both docstring tables), RULES.md R76, `tests/test_engine/test_scoring.py`
+  band edges, `tests/test_fuzz/fuzz_helpers.py` expected_advancement. Heavy invariant battery
+  green (round-end bookkeeping cross-check).
+- Ratified as house rules: **D15** (defender last trick → bottom scores for nobody),
+  **D11** (trump-suit friend-card ban), **#51 cap** (attacking max +3; takeover is the extra
+  reward).
+
+---
+
 ## Session 27b — Frontend/live-server fuzz: D26 verified E2E, one room-killing bug found+fixed
 
 **Date:** 2026-07-29 (same session as the campaign; after PR #64 merged to main)

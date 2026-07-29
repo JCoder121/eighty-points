@@ -8,7 +8,11 @@
 ## Where we are
 
 - **All milestones (M0–M9) are complete** — M9's integration suite was backfilled in Session 26 (`tests/test_integration/`, 40 tests).
-- **905 tests passing** (pytest, ~6s). Heavy property gate: `FUZZ=1 python -m pytest tests/test_fuzz` (211 tests, ~2min) — run it after any engine change.
+- **907 tests passing** (pytest, ~6s). Heavy property gate: `FUZZ=1 python -m pytest tests/test_fuzz` (211 tests, ~2min) — run it after any engine change.
+- **Live-server + browser verification done (Session 27b):** D26 bid protocol verified E2E
+  against real uvicorn (11/11 scripted WS checks); 4-tab Playwright smoke green with zero
+  console errors incl. the full failed-throw pipeline. One room-killing bug found+fixed: a
+  malformed WS frame used to abort the whole room (`test_malformed_frames.py` pins it).
 - **Engine verification campaign complete (Session 27, 2026-07-29).** `docs/RULES.md` is the
   single authoritative ruleset (R1-R84, decisions D01-D26); every fix cites a decision number.
   Campaign artifacts: `VERIFICATION_PLAYBOOK.md` (process), `docs/reports/2026-07-29-*.md`

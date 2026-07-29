@@ -4,6 +4,44 @@ Newest entries at the top.
 
 ---
 
+## Session 27b — Frontend/live-server fuzz: D26 verified E2E, one room-killing bug found+fixed
+
+**Date:** 2026-07-29 (same session as the campaign; after PR #64 merged to main)
+
+### Live-server WS fuzz (scripted 4-player client vs real uvicorn)
+
+11/11 checks pass: nonexistent-room 400, duplicate-name 400; **D26 protocol end to end**
+(count=1 places a real SINGLE bid despite holding the pair; count=2 self-overrides to the
+pair per D04; count=3, count=true, joker+count=1, count-without-the-card all rejected with
+errors and no state change); 12-payload junk battery (bad JSON, unknown actions, out-of-phase
+plays, malformed fields) with the room progressing normally afterwards.
+
+- **Bug found and fixed:** `receive_json()` sat OUTSIDE the containment try in
+  `handle_connection` — one non-JSON frame from any client aborted the entire 4-player room
+  (plus a variant: JSON non-object frames crashed the containment's own logging path). The
+  loop now parses frames itself; malformed frames get a per-player error and the room lives.
+  Pinned by `tests/test_network/test_malformed_frames.py`. 907 tests.
+- Test-infra footnote: the 4-portal TestClient version of that pin deadlocks inside pytest
+  (passes standalone + against live uvicorn), so the committed pin uses a single connection —
+  sufficient to catch the regression since pre-fix the frame killed that connection's room.
+
+### Browser E2E smoke (Playwright, 4 tabs, real uvicorn)
+
+Full flow green with ZERO console errors (only the known favicon 404): create/join ×4,
+lobby, host mode-select, 100-card deal, bid-button gating (only held suits enabled), single
+bid via UI, outbid players pass, bidding closes, 33-card bottom exchange, and the complete
+#60 throw pipeline live: confirm dialog with exact stake ("10 pts per thrown card (20 pts)"),
+Cancel preserves selection, confirm → engine forces the smallest beatable component (K♥; the
+A♥ ties the other live A♥ so only the K was beatable), A♥ returns to hand, orange
+throw-failed banner on all tabs, `throw_penalty` in the game log, follow obligations enforced
+per seat, trick resolved to the defenders (Atk stays 0 with both K♥ captured by Alice).
+Game JSONL event sequence exactly as designed.
+
+**Frontend note:** no UI yet for explicit single bids (D26 `count=1`) — the UI's suit button
+still auto-bids strongest. Protocol is live and verified; UI control is a polish-session item.
+
+---
+
 ## Session 27 — Engine verification campaign (VERIFICATION_PLAYBOOK.md executed end to end)
 
 **Date:** 2026-07-29

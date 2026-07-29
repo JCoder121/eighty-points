@@ -13,6 +13,7 @@ Key entry points
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -641,7 +642,19 @@ async def handle_connection(
 
     try:
         while True:
-            data = await ws.receive_json()
+            # Parse failures are the CLIENT's fault and must not reach the
+            # outer except (which tears the whole room down): a single
+            # malformed frame from one buggy client would end the game for
+            # all four players.  Found by live-server WS fuzz, Session 27.
+            raw = await ws.receive_text()
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                await send_error(room, player_id, "Message is not valid JSON.")
+                continue
+            if not isinstance(data, dict):
+                await send_error(room, player_id, "Message must be a JSON object.")
+                continue
             try:
                 await handle_message(room, player_id, data, manager, deal_delay)
             except Exception as exc:  # noqa: BLE001 — containment boundary

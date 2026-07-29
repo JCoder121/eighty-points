@@ -30,7 +30,7 @@
     button:hover:not(:disabled) { background: #3a3a6a; border-color: #888; }
     button:disabled { opacity: 0.4; cursor: default; }
 
-    input[type="text"], input[type="text"]:focus {
+    input[type="text"], input[type="number"], select {
       font-family: inherit;
       font-size: 14px;
       background: #111130;
@@ -41,7 +41,9 @@
       outline: none;
       width: 100%;
     }
-    input[type="text"]:focus { border-color: #8888ff; }
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    select:focus { border-color: #8888ff; }
 
     .hidden { display: none !important; }
 
@@ -115,6 +117,42 @@
       text-align: center;
     }
 
+    /* Optional "resume a previous session" block inside Create Room. */
+    .resume-details {
+      border: 1px dashed #444;
+      border-radius: 6px;
+      background: #0d0d22;
+      padding: 8px 12px;
+    }
+    .resume-details > summary {
+      cursor: pointer;
+      font-size: 13px;
+      color: #aaaaff;
+      list-style: none;
+      user-select: none;
+    }
+    .resume-details > summary::-webkit-details-marker { display: none; }
+    .resume-details > summary::before { content: "▸ "; }
+    .resume-details[open] > summary::before { content: "▾ "; }
+
+    .resume-hint, .seed-hint {
+      font-size: 11px;
+      color: #777;
+      line-height: 1.5;
+      margin: 8px 0;
+    }
+
+    .resume-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 8px 10px;
+      align-items: center;
+    }
+    .resume-grid label { font-size: 13px; color: #bbb; }
+
+    .seed-row { display: flex; align-items: center; gap: 10px; }
+    .seed-row label { font-size: 13px; color: #bbb; white-space: nowrap; }
+
     /* ------------------------------------------------------------------ */
     /* Screen: Lobby                                                        */
     /* ------------------------------------------------------------------ */
@@ -132,12 +170,12 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
-      width: 300px;
+      width: 340px;
     }
     .player-entry {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
       background: #111130;
       border: 1px solid #333;
       border-radius: 6px;
@@ -151,6 +189,53 @@
       padding: 2px 7px;
       border-radius: 10px;
       font-weight: bold;
+    }
+    .player-entry .seat-no {
+      font-size: 11px;
+      color: #777;
+      letter-spacing: 1px;
+      min-width: 46px;
+    }
+    .player-entry .player-name { flex: 1; }
+    .player-entry .rank-badge {
+      font-size: 11px;
+      background: #2a2a55;
+      border: 1px solid #8888ff;
+      color: #ccccff;
+      padding: 2px 7px;
+      border-radius: 10px;
+      white-space: nowrap;
+    }
+    .player-entry .leader-badge {
+      font-size: 11px;
+      background: #55441a;
+      border: 1px solid #ffcc44;
+      color: #ffcc44;
+      padding: 2px 7px;
+      border-radius: 10px;
+      white-space: nowrap;
+    }
+    .seat-ctrls { display: flex; flex-direction: column; gap: 2px; }
+    .seat-ctrls button {
+      font-size: 10px;
+      line-height: 1;
+      padding: 3px 6px;
+      border-radius: 3px;
+    }
+
+    #seat-hint {
+      font-size: 12px;
+      color: #888;
+      text-align: center;
+      max-width: 340px;
+    }
+    #seat-hint .hint-detail { color: #666; }
+
+    #lobby-error {
+      color: #ff6666;
+      font-size: 13px;
+      min-height: 18px;
+      text-align: center;
     }
     .player-slot {
       background: #0d0d22;
@@ -180,24 +265,6 @@
       background: #3a3a8a;
       border-color: #8888ff;
       color: #ffffff;
-    }
-
-    #superuser-section {
-      border: 1px dashed #444;
-      border-radius: 8px;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 10px;
-      background: #0d0d22;
-      width: 300px;
-    }
-    #superuser-confirm {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 13px;
     }
 
     /* ------------------------------------------------------------------ */
@@ -744,6 +811,38 @@
   <div class="landing-card">
     <h2>Create Room</h2>
     <input type="text" id="create-name" placeholder="Your name" maxlength="20" />
+
+    <!-- Optional resume block. Collapsed by default; its values are only sent
+         to the server when it has been expanded. -->
+    <details id="resume-section" class="resume-details">
+      <summary id="resume-summary">Resume a previous session</summary>
+      <p class="resume-hint">
+        Ranks are set per seat, not per player — arrange the seats in the lobby
+        once everyone has joined.
+      </p>
+      <div class="resume-grid">
+        <label for="resume-rank-0">Seat 1 rank</label>
+        <select id="resume-rank-0" class="resume-rank"></select>
+        <label for="resume-rank-1">Seat 2 rank</label>
+        <select id="resume-rank-1" class="resume-rank"></select>
+        <label for="resume-rank-2">Seat 3 rank</label>
+        <select id="resume-rank-2" class="resume-rank"></select>
+        <label for="resume-rank-3">Seat 4 rank</label>
+        <select id="resume-rank-3" class="resume-rank"></select>
+        <label for="resume-leader">Leader</label>
+        <select id="resume-leader"></select>
+        <label for="resume-round">Round #</label>
+        <input type="number" id="resume-round" min="1" step="1" value="1" />
+      </div>
+    </details>
+
+    <div class="seed-row">
+      <label for="create-seed"
+             title="Deterministic deals: the same seed replays the same hands round after round. Useful for replays and simulations.">Seed</label>
+      <input type="number" id="create-seed" step="1" placeholder="optional"
+             title="Deterministic deals: the same seed replays the same hands round after round. Useful for replays and simulations." />
+    </div>
+
     <button id="create-btn">Create Room</button>
   </div>
 
@@ -769,22 +868,16 @@
   <div class="lobby-body">
     <div id="player-list"></div>
 
+    <div id="seat-hint"></div>
+
     <div id="lobby-status">Waiting for players...</div>
+
+    <div id="lobby-error"></div>
 
     <!-- Mode selector — only shown to game master -->
     <div id="mode-selector" class="hidden">
       <button id="btn-upgrade">Upgrade (升级)</button>
       <button id="btn-find-friends">Find Friends (找朋友)</button>
-    </div>
-
-    <!-- Superuser section — only shown to game master -->
-    <div id="superuser-section" class="hidden">
-      <button id="btn-superuser-enable">Enable Superuser Mode?</button>
-      <div id="superuser-confirm" class="hidden">
-        <span>Are you sure?</span>
-        <button id="btn-superuser-yes">Yes, Enable</button>
-        <button id="btn-superuser-cancel">Cancel</button>
-      </div>
     </div>
   </div>
 </div>

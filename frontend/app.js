@@ -92,6 +92,15 @@ function setLandingError(msg) {
   document.getElementById("landing-error").textContent = msg;
 }
 
+function setLobbyError(msg) {
+  const el = document.getElementById("lobby-error");
+  el.textContent = msg;
+  if (msg) {
+    clearTimeout(el._timer);
+    el._timer = setTimeout(() => { el.textContent = ""; }, 6000);
+  }
+}
+
 function setGameError(msg) {
   const el = document.getElementById("game-error");
   el.textContent = msg;
@@ -116,12 +125,55 @@ async function apiPost(path, body, extraHeaders) {
 
 // ── Landing page actions ──────────────────────────────────────────────────
 
+// Fill the resume selects. Ranks come from RANK_ORDER so the options always
+// match what the server accepts.
+function populateResumeControls() {
+  for (let seat = 0; seat < 4; seat++) {
+    const sel = document.getElementById(`resume-rank-${seat}`);
+    for (const rank of RANK_ORDER) {
+      const opt = document.createElement("option");
+      opt.value = rank;
+      opt.textContent = rank;
+      sel.appendChild(opt);
+    }
+    sel.value = "2";
+  }
+  const leaderSel = document.getElementById("resume-leader");
+  for (let seat = 0; seat < 4; seat++) {
+    const opt = document.createElement("option");
+    opt.value = String(seat);
+    opt.textContent = `Seat ${seat + 1}`;
+    leaderSel.appendChild(opt);
+  }
+  leaderSel.value = "0";
+}
+
+// The resume block is opt-in: an untouched (collapsed) section sends no setup
+// at all, so a plain room still starts everyone at rank 2 / round 1.
+function readResumeSetup() {
+  if (!document.getElementById("resume-section").open) return null;
+  const setup = {
+    starting_ranks: [0, 1, 2, 3].map(
+      seat => document.getElementById(`resume-rank-${seat}`).value
+    ),
+    starting_leader_seat: Number(document.getElementById("resume-leader").value),
+  };
+  const round = document.getElementById("resume-round").value.trim();
+  if (round !== "") setup.starting_round_number = Number(round);
+  return setup;
+}
+
 async function createRoom() {
   const name = document.getElementById("create-name").value.trim();
   if (!name) { setLandingError("Enter your name first."); return; }
   setLandingError("");
+  const body = { name };
+  const setup = readResumeSetup();
+  if (setup) body.setup = setup;
+  const seed = document.getElementById("create-seed").value.trim();
+  if (seed !== "") body.seed = Number(seed);
   try {
-    const data = await apiPost("/rooms", { name });
+    const data = await apiPost("/rooms", body);
     S.roomId     = data.room_id;
     S.playerId   = data.player_id;
     S.playerName = name;
@@ -522,7 +574,14 @@ function handleThrowFailed(msg) {
 }
 
 function handleError(msg) {
-  setGameError(msg.message || "Server error.");
+  const text = msg.message || "Server error.";
+  // Lobby actions (seat reordering, mode selection) report through the same
+  // channel as in-game errors, so send the text to whichever screen is up.
+  if (document.getElementById("screen-lobby").style.display !== "none") {
+    setLobbyError(text);
+  } else {
+    setGameError(text);
+  }
 }
 
 // ── Overlays ──────────────────────────────────────────────────────────────
@@ -599,7 +658,12 @@ function renderLobby() {
   const phase  = gs ? gs.phase : "waiting";
   const n      = ru.players.length;
 
-  // Player list (4 slots)
+  // Ranks and the leading seat only mean something once a resume setup fixed
+  // them; a fresh room would just show "Rank 2" on everyone.
+  const hasSetup = !!ru.setup;
+  const canReorder = S.isGameMaster && phase === "waiting" && n > 1;
+
+  // Player list (4 slots), in seat order
   const list = document.getElementById("player-list");
   list.innerHTML = "";
   for (let i = 0; i < 4; i++) {
@@ -607,15 +671,54 @@ function renderLobby() {
       const p   = ru.players[i];
       const div = document.createElement("div");
       div.className = "player-entry";
+
+      const seatSpan = document.createElement("span");
+      seatSpan.className = "seat-no";
+      seatSpan.textContent = `SEAT ${i + 1}`;
+      div.appendChild(seatSpan);
+
       const nameSpan = document.createElement("span");
+      nameSpan.className = "player-name";
       nameSpan.textContent = p.name;
       div.appendChild(nameSpan);
+
+      if (hasSetup && p.rank) {
+        const rankBadge = document.createElement("span");
+        rankBadge.className = "rank-badge";
+        rankBadge.textContent = `Rank ${rankDisplay(p.rank)}`;
+        div.appendChild(rankBadge);
+      }
+      if (hasSetup && p.id === ru.round_leader_id) {
+        const leadBadge = document.createElement("span");
+        leadBadge.className = "leader-badge";
+        leadBadge.textContent = "Leads";
+        div.appendChild(leadBadge);
+      }
       if (p.id === ru.game_master_id) {
         const badge = document.createElement("span");
         badge.className = "badge";
         badge.textContent = "Host";
         div.appendChild(badge);
       }
+
+      if (canReorder) {
+        const ctrls = document.createElement("span");
+        ctrls.className = "seat-ctrls";
+        const up = document.createElement("button");
+        up.textContent = "▲";
+        up.title = `Move ${p.name} to seat ${i}`;
+        up.disabled = (i === 0);
+        up.addEventListener("click", () => swapSeats(i, i - 1));
+        const down = document.createElement("button");
+        down.textContent = "▼";
+        down.title = `Move ${p.name} to seat ${i + 2}`;
+        down.disabled = (i === n - 1);
+        down.addEventListener("click", () => swapSeats(i, i + 1));
+        ctrls.appendChild(up);
+        ctrls.appendChild(down);
+        div.appendChild(ctrls);
+      }
+
       list.appendChild(div);
     } else {
       const div = document.createElement("div");
@@ -624,6 +727,14 @@ function renderLobby() {
       list.appendChild(div);
     }
   }
+
+  // Seat order decides the partnerships and, with a setup, which rank each
+  // player resumes at — so spell both out for the host.
+  const hintEl = document.getElementById("seat-hint");
+  let hint = "Partners: Seats 1 & 3 vs Seats 2 & 4.";
+  if (hasSetup) hint += " Ranks stay with the seat, not the player.";
+  if (canReorder) hint += " Use ▲ / ▼ to rebuild the table.";
+  hintEl.textContent = phase === "waiting" ? hint : "";
 
   // Status text
   const statusEl = document.getElementById("lobby-status");
@@ -648,10 +759,18 @@ function renderLobby() {
   } else {
     modeDiv.classList.add("hidden");
   }
+}
 
-  // Superuser section (game master only)
-  const suDiv = document.getElementById("superuser-section");
-  S.isGameMaster ? suDiv.classList.remove("hidden") : suDiv.classList.add("hidden");
+// Seat moves are sent as the full post-swap order and re-rendered from the
+// room_update that comes back, so the server stays the only seat authority.
+function swapSeats(i, j) {
+  const ru = S.roomUpdate;
+  if (!ru) return;
+  const order = ru.players.map(p => p.id);
+  if (i < 0 || j < 0 || i >= order.length || j >= order.length) return;
+  [order[i], order[j]] = [order[j], order[i]];
+  setLobbyError("");
+  sendWS({ action: "reorder_seats", order });
 }
 
 function modeName(mode) {
@@ -1492,25 +1611,11 @@ function renderPlayArea(area, gs) {
   }
 }
 
-// ── Superuser enable ──────────────────────────────────────────────────────
-
-async function enableSuperuser() {
-  try {
-    // The superuser API authenticates via X-Player-Id (must be game master).
-    await apiPost(`/superuser/enable/${S.roomId}`, {}, { "X-Player-Id": S.playerId });
-    const btn = document.getElementById("btn-superuser-enable");
-    btn.textContent = "Superuser Mode: ON";
-    btn.disabled    = true;
-    document.getElementById("superuser-confirm").classList.add("hidden");
-  } catch (e) {
-    setGameError(`Superuser enable failed: ${e.message}`);
-  }
-}
-
 // ── Event listeners ───────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
   // Landing
+  populateResumeControls();
   document.getElementById("create-btn").addEventListener("click", createRoom);
   document.getElementById("join-btn").addEventListener("click",   joinRoom);
   document.getElementById("create-name").addEventListener("keydown", e => {
@@ -1544,15 +1649,6 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   document.getElementById("btn-find-friends").addEventListener("click", () => {
     sendWS({ action: "select_mode", mode: "find_friends" });
-  });
-
-  // Superuser
-  document.getElementById("btn-superuser-enable").addEventListener("click", () => {
-    document.getElementById("superuser-confirm").classList.remove("hidden");
-  });
-  document.getElementById("btn-superuser-yes").addEventListener("click", enableSuperuser);
-  document.getElementById("btn-superuser-cancel").addEventListener("click", () => {
-    document.getElementById("superuser-confirm").classList.add("hidden");
   });
 
   // Overlay OK → reset all state and go back to landing

@@ -349,7 +349,22 @@ def _tractor_pair_capacity(
     claim up to *needed* cards from tractors, then count remaining paired
     cards (capped by the slots still open).
     """
+    tractor_cards, paired, _claimed, _rest = _claim_tractor_pairs(cards, needed, ctx)
+    return tractor_cards, paired
+
+
+def _claim_tractor_pairs(
+    cards: list[Card], needed: int, ctx: TrumpContext
+) -> tuple[int, int, list[Card], list[Card]]:
+    """Greedy claim of tractor-then-pair structure toward *needed* cards.
+
+    Returns (tractor_cards, additional_pair_cards, claimed, remaining).  The
+    counts are the structural capacity; *claimed* and *remaining* let a caller
+    consume the claim from a hand while judging several throw components in
+    sequence.
+    """
     remaining = list(cards)
+    claimed: list[Card] = []
     tractor_cards = 0
     for t in sorted(find_tractors(remaining, ctx), key=len, reverse=True):
         if tractor_cards >= needed:
@@ -357,14 +372,32 @@ def _tractor_pair_capacity(
         take = min(len(t), needed - tractor_cards)
         # Only whole pairs count as tractor structure
         take -= take % 2
+        if take == 0:
+            continue
         tractor_cards += take
+        claimed.extend(t[:take])
         for c in t[:take]:
             remaining.remove(c)
 
-    paired = sum(len(g) - len(g) % 2 for g in identity_groups(remaining).values())
-    paired = min(paired, needed - tractor_cards)
-    paired -= paired % 2
-    return tractor_cards, paired
+    paired = 0
+    for group in sorted(
+        identity_groups(remaining).values(),
+        key=lambda g: ctx.card_order(g[0]),
+        reverse=True,
+    ):
+        open_slots = needed - tractor_cards - paired
+        if open_slots <= 1:
+            break
+        take = min(len(group) - len(group) % 2, open_slots)
+        take -= take % 2
+        if take == 0:
+            continue
+        paired += take
+        claimed.extend(group[:take])
+        for c in group[:take]:
+            remaining.remove(c)
+
+    return tractor_cards, paired, claimed, remaining
 
 
 def _is_valid_throw_follow(
@@ -380,15 +413,16 @@ def _is_valid_throw_follow(
     play contains matching structures.  Any remaining slots are free-choice
     suited cards.
 
-    Structural obligations (not card-specific) are used for IdenticalGroup
-    components so that the player can choose *which* pair/group to play.
-    Tractor components use card-specific obligations (same as tractor follow)
-    since multiple tractors in one suit is extremely rare.
+    Obligations are structural, not card-specific: the hand fixes how much
+    structure must appear in the play, but *which* tractor, pair or group
+    supplies it is the follower's choice (D23 — previously a Tractor component
+    demanded the exact cards the greedy scan claimed, which forced the weakest
+    of two equal-length tractors and contradicted R46).
     """
     hand_rem = list(hand_suited)
 
-    # Card-specific required cards (for tractor components)
-    required_cards: list[Card] = []
+    # Tractor obligations: (required_tractor_cards, required_paired_cards, size)
+    tractor_obligations: list[tuple[int, int, int]] = []
     # Structural obligations: list of group sizes the proposed must contain
     group_obligations: list[int] = []
 
@@ -396,35 +430,10 @@ def _is_valid_throw_follow(
         comp_n = _format_card_count(comp)
 
         if isinstance(comp, Tractor):
-            # Use tractor follow logic: greedily claim tractors then pairs
-            remaining = list(hand_rem)
-            comp_required: list[Card] = []
-
-            for t in sorted(find_tractors(remaining, ctx), key=len, reverse=True):
-                if len(comp_required) >= comp_n:
-                    break
-                take = min(len(t), comp_n - len(comp_required))
-                comp_required.extend(t[:take])
-                for c in t[:take]:
-                    remaining.remove(c)
-
-            if len(comp_required) < comp_n:
-                id_groups = sorted(
-                    identity_groups(remaining).values(),
-                    key=lambda g: ctx.card_order(g[0]),
-                    reverse=True,
-                )
-                for group in id_groups:
-                    if len(comp_required) >= comp_n:
-                        break
-                    if len(group) >= 2:
-                        take = min(len(group), comp_n - len(comp_required))
-                        comp_required.extend(group[:take])
-                        for c in group[:take]:
-                            remaining.remove(c)
-
-            required_cards.extend(comp_required)
-            hand_rem = remaining
+            req_tractor, req_paired, _claimed, hand_rem = _claim_tractor_pairs(
+                hand_rem, comp_n, ctx
+            )
+            tractor_obligations.append((req_tractor, req_paired, comp_n))
 
         elif isinstance(comp, IdenticalGroup):
             k = comp.count
@@ -446,11 +455,19 @@ def _is_valid_throw_follow(
 
     prop_rem = list(proposed_suited)
 
-    # Check card-specific requirements (tractor components)
-    for req in required_cards:
-        if req not in prop_rem:
+    # Tractor components — largest first, so a long tractor is matched by a
+    # long one before shorter obligations consume its pairs.
+    for req_tractor, req_paired, comp_n in sorted(
+        tractor_obligations, key=lambda o: -o[2]
+    ):
+        got_tractor, got_paired, _claimed, prop_rem = _claim_tractor_pairs(
+            prop_rem, comp_n, ctx
+        )
+        if got_tractor < req_tractor:
             return False
-        prop_rem.remove(req)
+        # Tractor cards are themselves paired, so compare total paired structure.
+        if got_tractor + got_paired < req_tractor + req_paired:
+            return False
 
     # Check structural requirements (group components) — largest first
     for k in sorted(group_obligations, reverse=True):
@@ -537,7 +554,13 @@ def find_beatable_components(
     beatable: list[tuple[TrickFormat, list[Card]]] = []
     for component, comp_cards in assigned:
         if not comp_cards:
-            continue
+            # Only reachable when the play holds >2 copies of one identity,
+            # which R1 forbids (the game is exactly two decks).  Skipping the
+            # component here would silently approve a beatable throw.
+            raise ValueError(
+                f"Throw component {component!r} was assigned no cards from "
+                f"{throw_cards!r}; a legal play cannot produce this."
+            )
         comp_suit = ctx.effective_suit(comp_cards[0])
         comp_strength = max(ctx.card_order(c) for c in comp_cards)
 
@@ -768,6 +791,20 @@ def resolve_trick_winner(
     return best_player_id
 
 
+def _play_effective_suit(cards: list[Card], ctx: TrumpContext) -> str | None:
+    """Return the effective suit shared by every card, or None if they differ.
+
+    D17: a play counts as "trump" only when *every* card in it is trump, and a
+    play spanning more than one effective suit has no suit at all — it can
+    never win a trick.  Reading the suit off ``cards[0]`` instead made
+    eligibility depend on the order the cards were submitted in.
+    """
+    suits = {ctx.effective_suit(c) for c in cards}
+    if len(suits) == 1:
+        return suits.pop()
+    return None
+
+
 def _play_strength(
     cards: list[Card],
     led_suit: str,
@@ -777,11 +814,14 @@ def _play_strength(
     """Return the strength key of a play, or None if ineligible to win.
 
     A play is ineligible if:
+    - Its cards span more than one effective suit (D17), OR
     - Its effective suit is neither the led suit nor trump, OR
     - Its classified format cannot beat the led format (degraded response).
     """
-    play_suit = ctx.effective_suit(cards[0])
-    if play_suit != led_suit and play_suit != "trump" and led_suit != "trump":
+    play_suit = _play_effective_suit(cards, ctx)
+    if play_suit is None:
+        return None  # spans >1 effective suit — never eligible (D17)
+    if play_suit != led_suit and play_suit != "trump":
         return None  # off-suit, ineligible
 
     # Degraded responses (e.g., two singles following a pair lead) cannot win.

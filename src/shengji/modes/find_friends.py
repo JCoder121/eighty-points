@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from shengji.models.card import Suit
+from shengji.models.deck import NUM_DECKS
 from shengji.modes.base import ModeStrategy
 
 if TYPE_CHECKING:
@@ -20,11 +21,6 @@ if TYPE_CHECKING:
 
 class FindFriendsStrategy(ModeStrategy):
     """Find Friends (找朋友) mode: fluid teams re-assigned each round."""
-
-    def __init__(self) -> None:
-        # Tracks how many times each (suit, rank) card has been played this round.
-        # Used to match against declaration ordinals.
-        self._play_counts: dict[tuple, int] = {}
 
     # ------------------------------------------------------------------
     # Team assignment
@@ -36,7 +32,7 @@ class FindFriendsStrategy(ModeStrategy):
         Friends are revealed incrementally via resolve_friend() as play
         progresses.  Play-count tracking is also reset here at round start.
         """
-        self._play_counts.clear()
+        state.friend_play_counts.clear()
         for p in state.players:
             p.is_defending = (p.id == state.round_leader_id)
             p.team = "defending" if p.is_defending else "attacking"
@@ -57,6 +53,9 @@ class FindFriendsStrategy(ModeStrategy):
           - Exactly (n_players // 2 - 1) declarations (→ 1 for 4-player game).
           - Each declared card must not be a trump-rank card.
           - Each declared card must not be a joker.
+          - Each ordinal must be in 1..NUM_DECKS (D20): with 2 decks only the
+            1st and 2nd copy of a card can ever be played, so any other
+            ordinal declares a friendship that can never resolve.
 
         Note: the leader is allowed to declare a card they hold themselves —
         this is legal, and the leader may end up as their own "friend" (1v3).
@@ -76,6 +75,11 @@ class FindFriendsStrategy(ModeStrategy):
 
         for decl in declarations:
             card = decl.card
+            if not 1 <= decl.ordinal <= NUM_DECKS:
+                raise ValueError(
+                    f"Friend-declaration ordinal must be between 1 and {NUM_DECKS}; "
+                    f"got {decl.ordinal}."
+                )
             if card.suit == Suit.JOKER:
                 raise ValueError(
                     f"Cannot declare a joker ({card}) as a friend card."
@@ -107,8 +111,8 @@ class FindFriendsStrategy(ModeStrategy):
             return
 
         key = (card.suit, card.rank)
-        self._play_counts[key] = self._play_counts.get(key, 0) + 1
-        count = self._play_counts[key]
+        count = state.friend_play_counts.get(key, 0) + 1
+        state.friend_play_counts[key] = count
 
         # Check whether this play triggers any unresolved declaration.
         for decl in state.friend_declarations:

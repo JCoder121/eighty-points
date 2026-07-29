@@ -8,6 +8,7 @@ from shengji.models.deck import HAND_SIZE, NUM_PLAYERS, BOTTOM_SIZE
 from shengji.models.game_state import GamePhase, GameState
 from shengji.models.player import Player
 from shengji.models.trump import TrumpContext
+from shengji.superuser import mutator
 from shengji.superuser.inspector import get_full_state, validate_state
 
 
@@ -235,3 +236,79 @@ class TestValidateStatePoints:
         state = _make_state()
         violations = validate_state(state)
         assert not any("attacking_points" in v for v in violations)
+
+
+# ---------------------------------------------------------------------------
+# validate_state — card multiplicity (R1: two decks, max 2 copies)
+# ---------------------------------------------------------------------------
+
+class TestValidateStateMultiplicity:
+    """R1 caps every card identity at two copies across the whole state.
+
+    The multiplicity check used to be gated behind the same phase skip as the
+    108-card total, so a hand written by ``mutator.set_hand`` before the deal
+    (WAITING) could hold three copies of one card and draw no warning at all.
+    That is the one state in which ``_assign_throw_components`` can hand a
+    throw component zero cards.
+    """
+
+    def _triple(self) -> list[Card]:
+        ten = _card(Suit.SPADES, Rank.TEN)
+        eight = _card(Suit.SPADES, Rank.EIGHT)
+        return [ten, ten, ten, eight, eight]
+
+    def test_triple_in_hand_flagged_in_waiting(self):
+        """The audit repro: set_hand with three 10-spades must warn."""
+        state = _make_state(GamePhase.WAITING)
+        warnings = mutator.set_hand(state, "p0", self._triple())
+        assert any("10" in w and "spades" in w and "3 times" in w for w in warnings), warnings
+
+    def test_triple_in_hand_flagged_in_playing(self):
+        state = _make_playing_state()
+        violations = validate_state(state)
+        assert not any("appears" in v for v in violations)
+        for p in state.players:
+            p.hand = [c for c in p.hand if c.suit != Suit.SPADES or c.rank != Rank.TEN]
+        state.bottom_deck = [
+            c for c in state.bottom_deck
+            if c.suit != Suit.SPADES or c.rank != Rank.TEN
+        ]
+        state.players[0].hand = self._triple()
+        assert any("3 times" in v for v in validate_state(state))
+
+    def test_two_copies_never_flagged(self):
+        state = _make_state(GamePhase.WAITING)
+        ten = _card(Suit.SPADES, Rank.TEN)
+        warnings = mutator.set_hand(state, "p0", [ten, ten])
+        assert not any("appears" in w for w in warnings), warnings
+
+    def test_copies_split_across_zones_flagged(self):
+        """Two in hand plus one in the bottom is still three copies."""
+        state = _make_state(GamePhase.WAITING)
+        ten = _card(Suit.SPADES, Rank.TEN)
+        mutator.set_hand(state, "p0", [ten, ten])
+        warnings = mutator.set_bottom(state, [ten])
+        assert any("3 times" in w for w in warnings), warnings
+
+    def test_copies_split_across_players_flagged(self):
+        state = _make_state(GamePhase.WAITING)
+        ten = _card(Suit.SPADES, Rank.TEN)
+        mutator.set_hand(state, "p0", [ten, ten])
+        warnings = mutator.set_hand(state, "p1", [ten])
+        assert any("3 times" in w for w in warnings), warnings
+
+    def test_copies_in_captured_pile_flagged(self):
+        state = _make_state(GamePhase.WAITING)
+        ten = _card(Suit.SPADES, Rank.TEN)
+        state.tricks_won = {"p0": [[ten, ten], [ten]]}
+        assert any("3 times" in v for v in validate_state(state))
+
+    def test_copies_in_current_trick_flagged(self):
+        state = _make_state(GamePhase.WAITING)
+        ten = _card(Suit.SPADES, Rank.TEN)
+        state.players[0].hand = [ten, ten]
+        state.current_trick = [("p1", [ten])]
+        assert any("3 times" in v for v in validate_state(state))
+
+    def test_empty_waiting_state_is_clean(self):
+        assert validate_state(_make_state(GamePhase.WAITING)) == []

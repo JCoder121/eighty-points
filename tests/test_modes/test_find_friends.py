@@ -75,12 +75,12 @@ class TestAssignTeams:
             assert state.players[i].team == "attacking"
 
     def test_play_counts_reset_on_assign(self):
-        """assign_teams() should reset internal play-count state."""
+        """assign_teams() should reset the play-count state on GameState."""
         state = _make_state("p0")
         # Simulate some leftover state from a previous round
-        self.strategy._play_counts[(Suit.SPADES, Rank.ACE)] = 2
+        state.friend_play_counts[(Suit.SPADES, Rank.ACE)] = 2
         self.strategy.assign_teams(state)
-        assert self.strategy._play_counts == {}
+        assert state.friend_play_counts == {}
 
 
 # ---------------------------------------------------------------------------
@@ -156,6 +156,28 @@ class TestValidateFriendDeclaration:
         state.trump_context = None
         # TWO_S would normally be banned — but no context so no restriction
         self.strategy.validate_friend_declaration(state, [_decl(TWO_S)])
+
+    # --- D20: ordinal range ------------------------------------------------
+    # With 2 decks there are exactly 2 copies of any non-joker card, so 1 and 2
+    # are the only ordinals that can ever fire.  Anything else is rejected
+    # rather than silently producing an unresolvable 1v3 round.
+
+    @pytest.mark.parametrize("ordinal", [1, 2])
+    def test_in_range_ordinals_accepted(self, ordinal):
+        state = _make_state()
+        self.strategy.validate_friend_declaration(state, [_decl(A_S, ordinal)])
+
+    @pytest.mark.parametrize("ordinal", [0, -1, 3, 5, 99])
+    def test_out_of_range_ordinal_raises(self, ordinal):
+        state = _make_state()
+        with pytest.raises(ValueError, match="ordinal"):
+            self.strategy.validate_friend_declaration(state, [_decl(A_S, ordinal)])
+
+    def test_ordinal_checked_even_without_trump_context(self):
+        state = _make_state()
+        state.trump_context = None
+        with pytest.raises(ValueError, match="ordinal"):
+            self.strategy.validate_friend_declaration(state, [_decl(A_S, 0)])
 
     def test_no_trump_suit_allows_any_suit(self):
         """No-trump bid (trump_suit=None) — any non-joker non-trump-rank suit is allowed."""

@@ -50,16 +50,22 @@ TrickFormat = Union[Single, IdenticalGroup, Tractor, Throw]
 
 def _position_groups(
     cards: list[Card], ctx: TrumpContext
-) -> dict[tuple[int, int], list[Card]]:
-    """Group cards by their (tier, rank_pos) key from card_order.
+) -> dict[tuple[str, int, int], list[Card]]:
+    """Group cards by their (effective_suit, tier, rank_pos) key.
+
+    The effective suit is part of the key because adjacency is suit-aware
+    (D22): tier-0 positions are per-suit, so 3♠ and 3♦ occupy *different*
+    tractor positions even though they tie in strength.  All trump cards share
+    the suit "trump" and so keep one shared ladder.
 
     NOTE: position expresses STRENGTH, not identity.  All off-suit trump-rank
     cards share one position but are different cards — never use position
     grouping to form pairs/groups; use identity_groups for that (issue #50).
     """
-    groups: dict[tuple[int, int], list[Card]] = defaultdict(list)
+    groups: dict[tuple[str, int, int], list[Card]] = defaultdict(list)
     for card in cards:
-        groups[ctx.card_order(card)].append(card)
+        tier, rank_pos = ctx.card_order(card)
+        groups[(ctx.effective_suit(card), tier, rank_pos)].append(card)
     return dict(groups)
 
 
@@ -108,10 +114,11 @@ def find_tractors(cards: list[Card], ctx: TrumpContext) -> list[list[Card]]:
     Leftover cards at those positions remain in the caller's hands.
 
     Limitation: the algorithm performs a linear scan over sorted positions and
-    therefore detects the circular wrap only when the wrapped positions happen
-    to be the sole members of tier 0 being examined.  Runs of 3+ positions
-    that wrap (e.g. K♠♠ A♠♠ 3♠♠ when trump rank=2) are not guaranteed to be
-    detected as a single tractor; they are detected as two separate runs.
+    therefore detects the circular wrap only when the wrapped positions are the
+    sole paired positions *in their suit*.  Runs of 3+ positions that wrap
+    (e.g. K♠♠ A♠♠ 3♠♠ when trump rank=2) are not guaranteed to be detected as a
+    single tractor; they are detected as two separate runs.  Pairs in other
+    suits no longer interfere, since positions are keyed per suit (D22).
     """
     pos_groups = _position_groups(cards, ctx)
 
@@ -119,7 +126,7 @@ def find_tractors(cards: list[Card], ctx: TrumpContext) -> list[list[Card]]:
     # a tractor.  A position may hold several identities (off-suit trump-rank
     # cards all share one position); the pair must come from a single identity,
     # so each position is represented by its largest identity group (#50).
-    pair_positions: dict[tuple[int, int], list[Card]] = {}
+    pair_positions: dict[tuple[str, int, int], list[Card]] = {}
     for pos, grp in pos_groups.items():
         best = max(identity_groups(grp).values(), key=len)
         if len(best) >= 2:
@@ -131,7 +138,7 @@ def find_tractors(cards: list[Card], ctx: TrumpContext) -> list[list[Card]]:
     sorted_positions = sorted(pair_positions.keys())
 
     tractors: list[list[Card]] = []
-    current_run: list[tuple[int, int]] = [sorted_positions[0]]
+    current_run: list[tuple[str, int, int]] = [sorted_positions[0]]
 
     for i in range(1, len(sorted_positions)):
         prev_pos = current_run[-1]
@@ -153,8 +160,8 @@ def find_tractors(cards: list[Card], ctx: TrumpContext) -> list[list[Card]]:
 
 
 def _build_tractor(
-    run: list[tuple[int, int]],
-    pair_positions: dict[tuple[int, int], list[Card]],
+    run: list[tuple[str, int, int]],
+    pair_positions: dict[tuple[str, int, int], list[Card]],
 ) -> list[Card]:
     """Build the card list for a tractor run, using min multiplicity."""
     mult = min(len(pair_positions[pos]) for pos in run)

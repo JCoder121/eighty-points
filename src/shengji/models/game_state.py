@@ -107,6 +107,10 @@ class GameState:
     # Find Friends only
     friend_declarations: list[FriendDeclaration] = field(default_factory=list)
     revealed_friends: set[str] = field(default_factory=set)
+    # How many times each (suit, rank) has been played this round, matched
+    # against declaration ordinals to reveal friends.  Engine bookkeeping —
+    # lives here (not on the strategy) so snapshots round-trip reveal progress.
+    friend_play_counts: dict[tuple, int] = field(default_factory=dict)
 
     # ------------------------------------------------------------------
     # Phase management

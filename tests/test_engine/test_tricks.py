@@ -4,6 +4,7 @@ from __future__ import annotations
 import pytest
 
 from shengji.engine.tricks import (
+    find_beatable_components,
     get_legal_plays,
     is_valid_follow,
     resolve_trick_winner,
@@ -939,3 +940,67 @@ class TestIsValidFollowThrowTwoPairComponents:
         hand = [_A_S2, _A_S2, _K_S2, _K_S2, _Q_S2, _J_S2]
         # Playing only one pair + 2 singles when two pairs exist is invalid
         assert not is_valid_follow([_A_S2, _A_S2, _Q_S2, _J_S2], hand, led, "spades", self.ctx)
+
+
+# ---------------------------------------------------------------------------
+# find_beatable_components — impossible-state assertion (audit §3.7)
+# ---------------------------------------------------------------------------
+
+class TestThrowComponentAssignmentIsTotal:
+    """Every throw component must receive cards, or the play is not a legal multiset.
+
+    A component can only end up with zero cards when the play holds more than
+    two copies of one identity, which R1 makes impossible (the game is exactly
+    two decks).  A 1.27M-throw search over legal multisets found zero cases;
+    the only way in is the superuser mutator.  The old code skipped such a
+    component's beat check silently, so ``validate_throw`` would approve a
+    throw whose largest component an opponent could beat outright.
+    """
+
+    ctx = _ctx()
+
+    def test_over_multiplicity_component_raises(self):
+        throw = [
+            _c(Suit.SPADES, Rank.EIGHT), _c(Suit.SPADES, Rank.EIGHT),
+            _c(Suit.SPADES, Rank.TEN), _c(Suit.SPADES, Rank.TEN),
+            _c(Suit.SPADES, Rank.TEN),
+        ]
+        fmt = classify_play(throw, self.ctx)
+        assert isinstance(fmt, Throw), "repro needs a Throw; classification changed"
+        hands = {
+            "p0": list(throw),
+            "p1": [_c(Suit.SPADES, Rank.ACE)] * 3,
+        }
+        with pytest.raises(ValueError, match="no cards"):
+            find_beatable_components(throw, "p0", hands, self.ctx)
+
+    def test_validate_throw_propagates_the_assertion(self):
+        throw = [
+            _c(Suit.SPADES, Rank.EIGHT), _c(Suit.SPADES, Rank.EIGHT),
+            _c(Suit.SPADES, Rank.TEN), _c(Suit.SPADES, Rank.TEN),
+            _c(Suit.SPADES, Rank.TEN),
+        ]
+        hands = {"p0": list(throw), "p1": [_c(Suit.SPADES, Rank.ACE)] * 3}
+        with pytest.raises(ValueError, match="no cards"):
+            validate_throw(throw, "p0", hands, self.ctx)
+
+    def test_legal_throw_still_reports_beatable_components(self):
+        """The guard must not disturb the normal path."""
+        throw = [
+            _c(Suit.SPADES, Rank.EIGHT), _c(Suit.SPADES, Rank.EIGHT),
+            _c(Suit.SPADES, Rank.THREE),
+        ]
+        hands = {
+            "p0": list(throw),
+            "p1": [_c(Suit.SPADES, Rank.ACE), _c(Suit.SPADES, Rank.ACE)],
+        }
+        beatable = find_beatable_components(throw, "p0", hands, self.ctx)
+        assert beatable, "an opponent pair of A-spades beats the 8-spades pair"
+
+    def test_unbeatable_legal_throw_returns_empty(self):
+        throw = [
+            _c(Suit.SPADES, Rank.ACE), _c(Suit.SPADES, Rank.ACE),
+            _c(Suit.SPADES, Rank.KING),
+        ]
+        hands = {"p0": list(throw), "p1": [_c(Suit.SPADES, Rank.THREE)]}
+        assert find_beatable_components(throw, "p0", hands, self.ctx) == []

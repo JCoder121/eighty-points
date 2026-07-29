@@ -8,7 +8,24 @@
 ## Where we are
 
 - **All milestones (M0–M9) are complete** — M9's integration suite was backfilled in Session 26 (`tests/test_integration/`, 40 tests).
-- **621 tests passing** (pytest).
+- **905 tests passing** (pytest, ~6s). Heavy property gate: `FUZZ=1 python -m pytest tests/test_fuzz` (211 tests, ~2min) — run it after any engine change.
+- **Engine verification campaign complete (Session 27, 2026-07-29).** `docs/RULES.md` is the
+  single authoritative ruleset (R1-R84, decisions D01-D26); every fix cites a decision number.
+  Campaign artifacts: `VERIFICATION_PLAYBOOK.md` (process), `docs/reports/2026-07-29-*.md`
+  (adversarial rules audit, edge-case coverage matrix, consolidated findings).
+- **Property test infrastructure** in `tests/test_fuzz/`: per-action invariant battery (card
+  conservation, zone exclusivity, points consistency), adversarial action fuzz
+  (reject-without-mutation), and an independent legality oracle (`oracle.py`) re-derived from
+  RULES.md that cross-checks every lead/follow verdict against the engine. Zero tolerances:
+  any oracle/engine disagreement fails the suite.
+- **Session 27 rule fixes (all ruled by interview, see RULES.md "Documented decisions"):**
+  D16 mixed-suit leads rejected · D17 suit-pure order-independent trick eligibility ·
+  D18 no-trump adjacency gap closed · D20 friend-ordinal validation · D21 friend state cleared
+  each deal (also fixed a live-score drift on repeat friends) · D22 suit-aware tractor
+  adjacency (cross-suit "tractors" could bypass throw validation entirely) · D23 structural
+  throw-tractor follows · D26 explicit single bids (WS `bid` action takes optional `count`;
+  **frontend UI for count=1 not built yet**) · D19/D24/D25 confirmed current behavior.
+  Also: exchange_bottom validates before mutating; FF reveal counters moved onto GameState.
 - **Scoring:** 80 pts to win, 20-pt bands; attacking advancement capped at +3 (#51); defending shutout +4. Game over only when defending while ALREADY at Ace (#52). Bottom multiplier = 2× winning play's largest component, capped 8× — single 2×, pair 4×, tractor 8× (#57).
 - **Pairs require identical cards (#50):** equal-strength off-suit trump-rank cards (e.g. 2♦+2♣) no longer form phantom pairs/quads — grouping is by identity everywhere (classify, follow validation, tractors, throw checks); strength/tie rules unchanged.
 - **Seeded terminal harness:** `python scripts/play_cli.py` — interactive play (all seats or `--human N`) and `--bots --games N` fuzzer with per-action `validate_state` sweep. Deck/GameEngine accept an injectable `random.Random`. Run the fuzzer after any engine change.

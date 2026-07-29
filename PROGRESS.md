@@ -4,6 +4,64 @@ Newest entries at the top.
 
 ---
 
+## Session 27 — Engine verification campaign (VERIFICATION_PLAYBOOK.md executed end to end)
+
+**Date:** 2026-07-29
+
+Full engine-verification campaign per `VERIFICATION_PLAYBOOK.md`: authoritative spec → parallel
+report-only audits → property/fuzz harness + independent legality oracle → consolidated
+findings → two interview batches with Jeffrey → three fix waves. 621 → 905 tests. Both modes
+(Upgrade + Find Friends) verified against the same spec and harness.
+
+### Spec (Phase 1)
+
+- `docs/RULES.md`: 84 numbered rules, 26 numbered decisions, authority order = Jeffrey's
+  on-record decisions > robertying.com/shengji (the game's original rules source) > pagat
+  (completeness checklist only). All 7 open forks interviewed and ruled (D16-D21 + D07
+  confirmed); 4 more ruled at consolidation (D23-D26); D22 recorded from sources.
+
+### Findings (Phases 2-4; reports in docs/reports/2026-07-29-*)
+
+- **F1 (critical, 3 agents converged on it independently):** tractor adjacency ignored suit —
+  `3♠3♠+4♦4♦` classified as a *Tractor*, skipped throw validation entirely, and would have
+  survived a naive D16 fix. Fixed by D22 (suit-aware adjacency) + D16 (lead-level gate).
+- **FINDING-1 (fuzz):** stale `revealed_friends` across rounds made `play_cards` skip the
+  live-points recompute for a repeat friend (42/60 FF seeds). Fixed by D21.
+- **FINDING-2 (fuzz):** `exchange_bottom` mutated before validating — a rejected exchange left
+  a 33-card hand and empty bottom. Fixed (validate-then-commit).
+- **F5/NEW-1:** throw-tractor follows were card-specific and forced the *weakest* of two
+  equal-length tractors (scan-order artifact). Fixed by D23 (structural, like R46).
+- **D17:** trick-winner eligibility read the suit off `cards[0]` — `[trump, junk]` won what
+  `[junk, trump]` lost. Fixed (suit-pure, order-independent; also closed the trump-lead hole).
+- Plus: D18 no-trump adjacency gap, D20 unvalidated friend ordinals, F6 reveal counters living
+  off-GameState (snapshot/restore lost them), F4 network silently upgrading single bids to
+  pairs (fixed per D26: optional `count` on the `bid` action, backward compatible), audit
+  hardening (silent-continue → raise; R1 multiplicity check in validate_state).
+- Refactor assessment: **pure-reducer refactor NOT needed** — rejections verified atomic,
+  rules logic already pure, seeding deterministic (audit §7).
+
+### Test infrastructure
+
+- `tests/test_fuzz/`: invariant battery + adversarial fuzz (fuzz_helpers.py drives seeded
+  random-legal games, checks card conservation / zone exclusivity / points consistency after
+  every action; junk actions must reject without mutation) and `oracle.py` + `test_oracle.py`
+  — an independent reimplementation of R6-R8/R35-R50 from RULES.md text, cross-checked against
+  the engine on ~11.5k candidate plays per light run. The oracle caught an asymmetry in its
+  own first D23 draft — the differential harness works in both directions.
+- Light modes run in the default suite (~6s total); heavy behind `FUZZ=1` (211 tests, ~2min).
+- ~50 gap-pin tests from the coverage matrix (D08 tractor-beat branch, D07, D19, D24, D25,
+  penalty accumulation, R83 takeover band, Ace clamps, redaction, no-trump R7 follows…).
+
+### Notes
+
+- Wave agents: 13 spawned across the campaign; 3 died on API connection errors (2 with zero
+  output, 1 after completing its files) — work verified from the tree, one task re-executed
+  by the main session directly.
+- Frontend follow-up (out of scope this session): UI for explicit single bids (D26 `count`),
+  and issue #29 (Playwright suite) remains open.
+
+---
+
 ## Session 26 — Cleanup sweep: seeded fuzzer, 5 engine bugs, M9 backfill, hardening
 
 **Date:** 2026-07-14

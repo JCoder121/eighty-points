@@ -23,15 +23,23 @@ class TrumpContext:
       5 — Big Joker
 
     Adjacency for tractor formation:
-      • Within tier 0: consecutive rank positions in the filtered list, PLUS
-        circular wrap (position 0 and position n-1 are adjacent).  This means
-        e.g. when trump rank=2, Ace and 3 are adjacent in non-trump suits.
-      • Within tier 1: consecutive rank positions only (no circular wrap).
-      • Tier 1 top ↔ tier 2: adjacent (highest trump-suit card is adjacent to
-        off-suit trump-rank cards in the trump hierarchy).
-      • Tier 2 ↔ tier 3, tier 3 ↔ tier 4, tier 4 ↔ tier 5: adjacent.
-      • Tier 0 ↔ tier 1: NOT adjacent (non-trump suits cannot form tractors
-        with trump-suit cards).
+      • The two cards must share an effective suit (D22).  Every trump card —
+        trump suit, trump rank of any suit, jokers — shares the suit "trump",
+        so the trump hierarchy still chains across tiers; two non-trump suits
+        never do.
+      • Otherwise two cards are adjacent iff no OCCUPIED strength position lies
+        strictly between their keys (D18), where a position counts as occupied
+        when some card actually maps to it in this context.  Empty rungs are
+        skipped: in no-trump, tiers 1 and 3 do not exist, so a trump-rank pair
+        and a Small-Joker pair are adjacent.  Occupied rungs still block: with
+        a trump suit, tier 2 (the off-suit trump-rank cards) sits between the
+        top trump-suit card and the on-suit trump-rank card, so A♥ and 2♥ are
+        NOT adjacent when ♥ is trump.
+      • Tier 0 keeps its circular wrap (position 0 and position n-1 are
+        adjacent within one suit) — so when trump rank=2, Ace and 3 are
+        adjacent in a non-trump suit.  There is no wrap inside tier 1.
+      • Tier 0 ↔ tier 1 is therefore never adjacent (non-trump suits cannot
+        form tractors with trump) — it falls out of the shared-suit rule.
     """
 
     trump_rank: Rank
@@ -66,6 +74,22 @@ class TrumpContext:
             return (1, rank_pos)
         return (0, rank_pos)
 
+    def occupied_positions(self) -> list[tuple[int, int]]:
+        """Every (tier, rank_pos) key some card maps to in this context, ascending.
+
+        Tiers 1 and 3 exist only when a trump suit is declared; in no-trump they
+        are empty rungs that adjacency skips over (D18).
+        """
+        n = len(self._filtered_ranks())
+        positions: list[tuple[int, int]] = [(0, p) for p in range(n)]
+        if self.trump_suit is not None:
+            positions.extend((1, p) for p in range(n))
+        positions.append((2, 0))
+        if self.trump_suit is not None:
+            positions.append((3, 0))
+        positions.extend([(4, 0), (5, 0)])
+        return sorted(positions)
+
     def effective_suit(self, card: Card) -> str:
         """Return the suit string used for trick-following.
 
@@ -87,32 +111,29 @@ class TrumpContext:
 
         See class docstring for the adjacency rules.
         """
+        # D22: adjacency is suit-aware.  Two pairs in different non-trump suits
+        # at consecutive tier-0 positions are a Throw, not a Tractor.
+        if self.effective_suit(card1) != self.effective_suit(card2):
+            return False
+
         o1 = self.card_order(card1)
         o2 = self.card_order(card2)
         # Normalise so o1 <= o2
         if o1 > o2:
             o1, o2 = o2, o1
+        # Cards at the same strength position are one rung, not two.
+        if o1 == o2:
+            return False
+
         t1, p1 = o1
         t2, p2 = o2
 
         n = len(self._filtered_ranks())  # 12
 
-        if t1 == t2:
-            # Consecutive positions within the same tier
-            if p2 == p1 + 1:
-                return True
-            # Circular wrap only for tier 0 (non-trump suits)
-            if t1 == 0 and p1 == 0 and p2 == n - 1:
-                return True
-            return False
+        # The circular wrap survives D18 as an explicit tier-0 rule: the
+        # positions between A and 3 the long way round are all occupied.
+        if t1 == 0 and t2 == 0 and p1 == 0 and p2 == n - 1:
+            return True
 
-        if t2 == t1 + 1:
-            # Tier 1 (trump suit, highest rank) → tier 2 (off-suit trump rank)
-            if t1 == 1 and p1 == n - 1 and p2 == 0:
-                return True
-            # Tier 2/3/4 each have only one rank position (pos=0); they are
-            # adjacent to the next tier.
-            if t1 >= 2 and p1 == 0 and p2 == 0:
-                return True
-
-        return False
+        # D18: adjacent iff no occupied strength position lies strictly between.
+        return not any(o1 < pos < o2 for pos in self.occupied_positions())

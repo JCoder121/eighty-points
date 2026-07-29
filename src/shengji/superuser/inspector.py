@@ -65,7 +65,8 @@ def validate_state(state: "GameState") -> list[str]:
     Checks performed
     ----------------
     1. Total card count (skipped in WAITING phase).
-    2. No card appears more than NUM_DECKS (2) times.
+    2. No card identity appears more than NUM_DECKS (2) times across all
+       zones — hands, bottom, draw pile, captured piles, current trick.
     3. trump_context is set in phases that require it.
     4. No player's hand exceeds HAND_SIZE.
     5. round_leader_id and current_turn_id (in PLAYING) refer to real players.
@@ -86,17 +87,18 @@ def validate_state(state: "GameState") -> list[str]:
             )
 
     # ------------------------------------------------------------------ #
-    # 2. Duplicate card check
+    # 2. Duplicate card check (R1) — every zone, every phase
     # ------------------------------------------------------------------ #
-    if state.phase not in _SKIP_CARD_COUNT_PHASES:
-        all_cards = _all_cards_in_play(state)
-        counts = Counter((c.suit, c.rank) for c in all_cards)
-        for (suit, rank), n in counts.items():
-            if n > _MAX_CARD_COPIES:
-                violations.append(
-                    f"Card {rank.value} of {suit.value} appears {n} times "
-                    f"(maximum is {_MAX_CARD_COPIES})."
-                )
+    # Unlike the total count, this holds before the deal too: a hand written
+    # by the mutator in WAITING with three copies of one card is invalid even
+    # though the 108-card total has not been reached yet.
+    counts = Counter((c.suit, c.rank) for c in _all_cards_in_play(state))
+    for (suit, rank), n in sorted(counts.items()):
+        if n > _MAX_CARD_COPIES:
+            violations.append(
+                f"Card {rank.value} of {suit.value} appears {n} times "
+                f"(maximum is {_MAX_CARD_COPIES})."
+            )
 
     # ------------------------------------------------------------------ #
     # 3. Trump context required in certain phases

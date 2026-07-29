@@ -374,10 +374,37 @@
     }
     #current-bid-display strong { color: #ffcc44; }
 
+    /* Each suit gets its own group holding the ×1 (single) and, when the
+       player holds the pair, the ×2 button.  The two are visually joined so
+       they read as one suit with two strengths rather than four buttons. */
+    .bid-suit-group { display: flex; gap: 2px; }
+
     .bid-btn-suit {
-      font-size: 20px;
-      width: 50px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      font-size: 18px;
+      width: 48px;
       padding: 8px 0;
+    }
+    .bid-suit-group .bid-btn-suit:first-child:not(:last-child) {
+      border-top-right-radius: 0;
+      border-bottom-right-radius: 0;
+    }
+    .bid-suit-group .bid-btn-suit:last-child:not(:first-child) {
+      border-top-left-radius: 0;
+      border-bottom-left-radius: 0;
+    }
+    /* Pair button reads as the stronger of the two. */
+    .bid-btn-suit.bid-count-2:not(:disabled) {
+      border-color: #ffcc44;
+      background: #2a2a55;
+    }
+    .bid-btn-suit .bid-mult {
+      font-size: 11px;
+      color: #dddddd;
+      letter-spacing: -0.5px;
     }
     .bid-btn-suit.suit-hearts, .bid-btn-suit.suit-diamonds { color: #ff6666; }
     .bid-btn-suit.suit-spades, .bid-btn-suit.suit-clubs   { color: #ccccff; }

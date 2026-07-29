@@ -1194,13 +1194,14 @@ function renderBidArea(area, gs) {
   if (lastBid) {
     const name  = (gs.players.find(p => p.id === lastBid.player_id) || {}).name || lastBid.player_id;
     const tc    = lastBid.resulting_trump;
-    const pair  = (lastBid.cards || []).length >= 2;
+    const count = (lastBid.cards || []).length;
     let desc;
     if (!tc.trump_suit) {
-      desc = pair ? "No Trump (pair)" : "No Trump";
+      desc = count >= 2 ? "No Trump (joker pair)" : "No Trump";
     } else {
       const sym = SUIT_SYMBOL[tc.trump_suit] || tc.trump_suit;
-      desc = `${rankDisplay(tc.trump_rank)} ${sym}${pair ? " (pair)" : ""}`;
+      desc = `${rankDisplay(tc.trump_rank)} ${sym} ×${count}`
+           + (count >= 2 ? " (pair)" : " (single)");
     }
     bidBanner.innerHTML = `Current bid: <strong>${name} — ${desc}</strong>`;
   } else {
@@ -1220,22 +1221,46 @@ function renderBidArea(area, gs) {
     { suit: "hearts",   sym: "♥" },
     { suit: "spades",   sym: "♠" },
   ];
-  for (const { suit, sym } of SUITS) {
+  // One button per *distinct* bid strength (D26): ×1 shows a single
+  // trump-rank card, ×2 shows the pair.  The count is always explicit — the
+  // server's auto-strongest fallback is no longer used from this UI.
+  const makeSuitBtn = (suit, sym, count, enabled) => {
     const btn = document.createElement("button");
-    btn.className = `bid-btn-suit suit-${suit}`;
-    btn.textContent = sym;
-    const canBid = available.some(b =>
-      (b.type === "single" || b.type === "pair") && b.suit === suit
-    );
-    btn.disabled = !canBid || S.hasPassed;
-    if (canBid && !S.hasPassed) {
-      const isPair = available.some(b => b.type === "pair" && b.suit === suit);
-      btn.title = isPair ? `Bid ${sym} (pair — nails it down)` : `Bid ${sym}`;
-      btn.addEventListener("click", () => sendWS({ action: "bid", suit }));
+    btn.className = `bid-btn-suit suit-${suit} bid-count-${count}`;
+    btn.innerHTML =
+      `<span class="bid-sym">${sym}</span><span class="bid-mult">×${count}</span>`;
+    btn.disabled = !enabled;
+    if (enabled) {
+      btn.title = count === 2
+        ? `Bid the ${sym} pair (nails trump down)`
+        : `Bid a single ${sym}`;
+      btn.addEventListener("click", () => sendWS({ action: "bid", suit, count }));
     }
-    bidRow.appendChild(btn);
-  }
+    return btn;
+  };
 
+  for (const { suit, sym } of SUITS) {
+    const group = document.createElement("span");
+    group.className = "bid-suit-group";
+    const hasSingle = available.some(b => b.type === "single" && b.suit === suit);
+    const hasPair   = available.some(b => b.type === "pair"   && b.suit === suit);
+    const live      = !S.hasPassed;
+
+    if (hasSingle || !hasPair) {
+      // Also the placeholder when nothing in this suit is available, so the
+      // row keeps a stable four-suit shape.
+      group.appendChild(makeSuitBtn(suit, sym, 1, hasSingle && live));
+    }
+    if (hasPair) {
+      group.appendChild(makeSuitBtn(suit, sym, 2, live));
+    }
+    bidRow.appendChild(group);
+  }
+  area.appendChild(bidRow);
+
+  // Joker (no-trump) bids are always pairs — no count applies.
+  const jokerRow = document.createElement("div");
+  jokerRow.className = "action-row";
   for (const joker of ["small", "big"]) {
     const btn = document.createElement("button");
     btn.textContent = joker === "small" ? "No Trump (小)" : "No Trump (大)";
@@ -1243,9 +1268,9 @@ function renderBidArea(area, gs) {
     if (!btn.disabled) {
       btn.addEventListener("click", () => sendWS({ action: "bid", joker }));
     }
-    bidRow.appendChild(btn);
+    jokerRow.appendChild(btn);
   }
-  area.appendChild(bidRow);
+  area.appendChild(jokerRow);
 
   // Pass / close bidding
   const ctrlRow = document.createElement("div");

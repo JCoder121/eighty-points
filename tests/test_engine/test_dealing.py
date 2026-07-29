@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 
 from shengji.engine.engine import GameEngine
-from shengji.models.card import Card, Rank, Suit
+from shengji.models.card import Card
 from shengji.models.deck import NUM_PLAYERS, HAND_SIZE, BOTTOM_SIZE
 from shengji.models.game_state import GamePhase, GameState
 from shengji.models.player import Player

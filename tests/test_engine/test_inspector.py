@@ -1,7 +1,6 @@
 """Tests for the core invariant checker (engine/inspector.py, formerly M6.1)."""
 from __future__ import annotations
 
-import pytest
 
 from shengji.models.card import Card, Rank, Suit
 from shengji.models.deck import HAND_SIZE, NUM_PLAYERS, BOTTOM_SIZE

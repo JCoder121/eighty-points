@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 
 from shengji.models.game_state import GamePhase
-from shengji.network.room import NUM_PLAYERS, Room, RoomManager
+from shengji.network.room import NUM_PLAYERS, RoomManager
 
 
 # ---------------------------------------------------------------------------

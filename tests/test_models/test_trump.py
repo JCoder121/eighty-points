@@ -1,5 +1,4 @@
 """Tests for TrumpContext: card ordering, effective suit, and tractor adjacency."""
-import pytest
 
 from shengji.models.card import Card, Rank, Suit, RANK_ORDER
 from shengji.models.trump import TrumpContext

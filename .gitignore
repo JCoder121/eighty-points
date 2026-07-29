@@ -9,6 +9,7 @@ build/
 .pytest_cache/
 .ruff_cache/
 logs/games/*.jsonl
+vid_demo/
 
 # macOS
 .DS_Store

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from shengji.models.card import Card
 from shengji.models.trump import TrumpContext

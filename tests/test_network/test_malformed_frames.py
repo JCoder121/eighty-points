@@ -19,7 +19,7 @@ follow-up valid action would never get a reply.
 """
 from __future__ import annotations
 
-from tests.test_network.test_websocket import _client, _next_of_type, _setup_room
+from tests.test_network.test_websocket import _client, _next_of_type
 
 
 def _connected(client):

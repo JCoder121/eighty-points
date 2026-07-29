@@ -3,6 +3,11 @@
 
 set -e
 
+# Kill any existing uvicorn/ngrok processes
+pkill -f uvicorn 2>/dev/null || true
+pkill -f ngrok 2>/dev/null || true
+sleep 1
+
 # Start uvicorn in the background
 echo "Starting uvicorn..."
 uvicorn shengji.network.app:app --reload &

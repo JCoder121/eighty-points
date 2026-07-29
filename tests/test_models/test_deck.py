@@ -1,7 +1,7 @@
 from collections import Counter
 
 from shengji.models.card import Card, Rank, Suit, RANK_ORDER, SUITED_SUITS
-from shengji.models.deck import Deck, TOTAL_CARDS, BOTTOM_SIZE, HAND_SIZE, NUM_PLAYERS
+from shengji.models.deck import Deck, TOTAL_CARDS, BOTTOM_SIZE, HAND_SIZE
 
 
 # ---------------------------------------------------------------------------

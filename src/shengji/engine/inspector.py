@@ -10,7 +10,6 @@ from __future__ import annotations
 from collections import Counter
 from typing import TYPE_CHECKING
 
-from shengji.models.card import Rank, Suit
 from shengji.models.deck import HAND_SIZE, NUM_DECKS
 from shengji.models.game_state import GamePhase
 

@@ -8,13 +8,13 @@
 ## Where we are
 
 - **All milestones (M0–M9) are complete** — M9's integration suite was backfilled in Session 26 (`tests/test_integration/`, 40 tests).
-- **907 tests passing** (pytest, ~6s). Heavy property gate: `FUZZ=1 python -m pytest tests/test_fuzz` (211 tests, ~2min) — run it after any engine change.
+- **944 tests passing** (pytest, ~6s). Heavy property gate: `FUZZ=1 python -m pytest tests/test_fuzz` (211 tests, ~2min) — run it after any engine change.
 - **Live-server + browser verification done (Session 27b):** D26 bid protocol verified E2E
   against real uvicorn (11/11 scripted WS checks); 4-tab Playwright smoke green with zero
   console errors incl. the full failed-throw pipeline. One room-killing bug found+fixed: a
   malformed WS frame used to abort the whole room (`test_malformed_frames.py` pins it).
 - **Engine verification campaign complete (Session 27, 2026-07-29).** `docs/RULES.md` is the
-  single authoritative ruleset (R1-R84, decisions D01-D26); every fix cites a decision number.
+  single authoritative ruleset (R1-R84, decisions D01-D28); every fix cites a decision number.
   Campaign artifacts: `VERIFICATION_PLAYBOOK.md` (process), `docs/reports/2026-07-29-*.md`
   (adversarial rules audit, edge-case coverage matrix, consolidated findings).
 - **Property test infrastructure** in `tests/test_fuzz/`: per-action invariant battery (card
@@ -28,7 +28,7 @@
   each deal (also fixed a live-score drift on repeat friends) · D22 suit-aware tractor
   adjacency (cross-suit "tractors" could bypass throw validation entirely) · D23 structural
   throw-tractor follows · D26 explicit single bids (WS `bid` action takes optional `count`;
-  **frontend UI for count=1 not built yet**) · D19/D24/D25 confirmed current behavior.
+  frontend has split ×1/×2 bid buttons per suit, driven by `available_bids`) · D19/D24/D25 confirmed current behavior.
   Also: exchange_bottom validates before mutating; FF reveal counters moved onto GameState.
 - **Resume & determinism (Session 27d):** POST /rooms takes optional `setup`
   (per-seat starting ranks + leader seat + round number — between-rounds resume; configured
@@ -38,15 +38,16 @@
   (seats 1&3 vs 2&4). **Superuser HTTP layer + lobby toggle REMOVED** per the assessment
   rulings (docs/reports/2026-07-29-superuser-assessment.md §6); `validate_state` moved to
   `engine/inspector.py`; mutator kept as an in-process test fixture. Round rewind
-  (game-master-authorized, round-start snapshots) is the queued next feature.
+  (game-master-authorized, round-start snapshots; design in the superuser assessment §3.1)
+  is the only sketched-but-unbuilt feature — Jeffrey may decide against it.
 - **Scoring:** 80 pts to win, 20-pt bands (width re-confirmed 2026-07-29, D27); attacking advancement capped at +3 (#51); defending shutout +4 for 1-19 pts, **+5 on a true zero** (D28, 2026-07-29). Game over only when defending while ALREADY at Ace (#52). Bottom multiplier = 2× winning play's largest component, capped 8× — single 2×, pair 4×, tractor 8× (#57).
 - **Pairs require identical cards (#50):** equal-strength off-suit trump-rank cards (e.g. 2♦+2♣) no longer form phantom pairs/quads — grouping is by identity everywhere (classify, follow validation, tractors, throw checks); strength/tie rules unchanged.
 - **Seeded terminal harness:** `python scripts/play_cli.py` — interactive play (all seats or `--human N`) and `--bots --games N` fuzzer with per-action `validate_state` sweep. Deck/GameEngine accept an injectable `random.Random`. Run the fuzzer after any engine change.
 - **Handler hardening:** a non-ValueError bug in message handling no longer destroys the room (contained + logged + per-player error); `validate_state` runs after every action with violations logged; `led_format`/`led_suit` are declared GameState fields.
 - **Current branch:** `main`
-- **No automated frontend tests yet.** All frontend testing is manual (a Playwright smoke pass was run in Session 26; full suite is issue #29).
+- **No committed frontend test suite.** Frontend flows were verified via repeated scripted Playwright passes (Sessions 26, 27b, 27d — full 4-tab flow, D26 bid UI, throw pipeline, resume/seed lobby). Issue #29 (committed suite) was closed at finalization: coverage achieved ad hoc, and its spec depended on the removed superuser API.
 - **Mobile layout:** Basic responsive support added — horizontal scroll hand on portrait mobile (≤600px), larger tap targets.
-- **Active work:** Bug fixes and polish discovered through manual play-testing.
+- **Project finalized 2026-07-29:** full verification sweep green on main (944 pytest + 211 FUZZ=1 + 15/15 CLI bot games). Remaining work is optional (round rewind) or playtest-driven.
 - **Find Friends mode** is fully implemented: correct phase ordering (declare before exchange), trump-suit/rank/joker restrictions, permanent friend status bar, friend reveal popups.
 - **Jokers display as 大/小** (Big Joker = 大, Small Joker = 小) in all UI locations; backend identifiers unchanged.
 - **End screen shows rank progression** (`old → new`) so players can see what changed each round.
@@ -72,7 +73,7 @@
 | Invariant checker | `engine/inspector.py` (`validate_state`; ex-superuser) | Complete |
 | Networking & rooms | `network/app.py`, `network/handler.py`, `network/room.py` | Complete |
 | Game logger | `engine/logger.py` | Complete |
-| Frontend | `frontend/index.html`, `frontend/app.js` | Complete (no mobile support) |
+| Frontend | `frontend/index.html`, `frontend/app.js` | Complete (basic responsive support) |
 
 ## How to run
 

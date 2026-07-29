@@ -140,11 +140,9 @@ class TestValidateBidCards:
 
 class TestCanOvertake:
     from shengji.models.bid import Bid
-    from shengji.models.trump import TrumpContext
 
     def _bid(self, player_id: str, cards: list[Card]) -> "Bid":
         from shengji.models.bid import Bid
-        from shengji.models.trump import TrumpContext
         return Bid(
             player_id=player_id,
             cards=cards,

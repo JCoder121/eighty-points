@@ -4,6 +4,32 @@ Newest entries at the top.
 
 ---
 
+## Session 28 — Finalization sweep
+
+**Date:** 2026-07-29
+
+Loose-end audit + full re-verification of main, then project closeout:
+
+- **Verification, all green on main:** 944 pytest (~6s) · `FUZZ=1` heavy gate 211 passed
+  (~2min) · `play_cli --bots --games 15` 15/15 clean with per-action `validate_state`.
+- **Superuser removal confirmed clean:** no references left in `network/` or `frontend/`;
+  no leftover `src/shengji/superuser/` or `tests/test_superuser/` dirs. Remaining mentions
+  (`to_superuser_view`, inspector, mutator) are the intentionally kept internals.
+- **Lint:** `ruff --fix` applied (18 unused imports / redefinitions, mostly tests; 944 still
+  green). Remaining 15 are intentional test-style semicolons + benign unused locals.
+- **Issue #29 closed:** frontend flows verified via repeated scripted Playwright passes
+  (Sessions 26/27b/27d); a committed suite's spec depended on the removed superuser API.
+- **Housekeeping:** `scripts/dev_mobile.sh` now kills stale uvicorn/ngrok before starting;
+  `vid_demo/` (local demo recordings) gitignored; 23 stale local branches pruned (all merged,
+  incl. squash-merged `fix/issues-31-32` and two worktree-agent leftovers).
+- CURRENT_STATE.md refreshed (944 tests, D01-D28, D26 UI shipped, #29 closed, round rewind
+  marked optional/undecided).
+
+**Project state: finalized.** Only round rewind (optional, may not be built) and
+playtest-driven polish remain.
+
+---
+
 ## Session 27d — Resume-at-levels, seat reorder, seeded rooms, D26 UI; superuser removed
 
 **Date:** 2026-07-29

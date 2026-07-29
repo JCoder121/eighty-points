@@ -12,7 +12,6 @@ in the current trump context.  Replaces the old `tier2 == tier1 + 1` stepping.
 """
 from __future__ import annotations
 
-import pytest
 
 from shengji.models.card import Card, Rank, Suit
 from shengji.models.groups import Throw, Tractor, classify_play, find_tractors

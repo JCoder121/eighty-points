@@ -1,7 +1,6 @@
 """Tests for REST endpoints (M7.2/M7.3)."""
 from __future__ import annotations
 
-import pytest
 from fastapi.testclient import TestClient
 
 from shengji.models.game_state import GamePhase

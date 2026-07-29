@@ -233,8 +233,6 @@ class TestDealSpecificHands:
     def test_can_be_played_through_engine(self):
         """After deal_specific_hands, the engine can play tricks normally."""
         from shengji.engine.engine import GameEngine
-        from shengji.engine.tricks import get_legal_plays
-        from shengji.models.groups import classify_play
 
         state = _make_state()
         state.trump_context = TrumpContext(

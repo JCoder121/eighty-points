@@ -11,7 +11,6 @@ from shengji.models.deck import NUM_PLAYERS, BOTTOM_SIZE, HAND_SIZE
 from shengji.models.friend_declaration import FriendDeclaration
 from shengji.models.game_state import GamePhase, GameState
 from shengji.models.player import Player
-from shengji.models.trump import TrumpContext
 
 
 # ---------------------------------------------------------------------------

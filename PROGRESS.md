@@ -4,6 +4,29 @@ Newest entries at the top.
 
 ---
 
+## Session 27d — Resume-at-levels, seat reorder, seeded rooms, D26 UI; superuser removed
+
+**Date:** 2026-07-29
+
+- **D26 UI:** split ×1/×2 bid buttons per suit, driven by `available_bids` (each entry
+  independently `_can_overtake`-gated, so "raise my own single to the pair unless outbid"
+  falls out server-side). Verified in-browser.
+- **Superuser assessment** (docs/reports/2026-07-29-superuser-assessment.md) + rulings:
+  replace with first-class features; between-rounds resume; lobby seat-reorder control;
+  rewind later, game-master-authorized. HTTP layer deleted; `validate_state` →
+  `engine/inspector.py`; mutator kept as test fixture.
+- **Resume-at-levels:** POST /rooms `setup` (seat-indexed ranks, leader seat, round number);
+  configured leader is predetermined (new `GameState.leader_predetermined`, R18); resume-at-Ace
+  pinned as a playable defend-at-Ace round. WS `reorder_seats` (master, WAITING, permutation).
+- **Seeded rooms:** POST /rooms `seed` → one shared `random.Random` for every round's engine;
+  determinism pinned (`tests/test_network/test_seeded_room.py`).
+- **Lobby UI:** collapsed resume form + seed input; seat rank badges + Leads marker;
+  ▲/▼ reorder (master only); partnership note; superuser button gone. Playwright-verified
+  end to end (resumed round-7 game shows the configured leader's trump rank).
+- 907 → 944 tests. Heavy gate green.
+
+---
+
 ## Session 27c — House-rules checklist interview → D27/D28
 
 **Date:** 2026-07-29

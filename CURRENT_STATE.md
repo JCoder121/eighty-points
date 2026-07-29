@@ -30,6 +30,15 @@
   throw-tractor follows · D26 explicit single bids (WS `bid` action takes optional `count`;
   **frontend UI for count=1 not built yet**) · D19/D24/D25 confirmed current behavior.
   Also: exchange_bottom validates before mutating; FF reveal counters moved onto GameState.
+- **Resume & determinism (Session 27d):** POST /rooms takes optional `setup`
+  (per-seat starting ranks + leader seat + round number — between-rounds resume; configured
+  leader is predetermined per R18; resume-at-Ace playable) and optional `seed` (one shared
+  RNG per room = reproducible sessions, web counterpart of `play_cli --seed`). Lobby has a
+  collapsed resume form, seat-attached rank badges, and game-master ▲/▼ seat reordering
+  (seats 1&3 vs 2&4). **Superuser HTTP layer + lobby toggle REMOVED** per the assessment
+  rulings (docs/reports/2026-07-29-superuser-assessment.md §6); `validate_state` moved to
+  `engine/inspector.py`; mutator kept as an in-process test fixture. Round rewind
+  (game-master-authorized, round-start snapshots) is the queued next feature.
 - **Scoring:** 80 pts to win, 20-pt bands (width re-confirmed 2026-07-29, D27); attacking advancement capped at +3 (#51); defending shutout +4 for 1-19 pts, **+5 on a true zero** (D28, 2026-07-29). Game over only when defending while ALREADY at Ace (#52). Bottom multiplier = 2× winning play's largest component, capped 8× — single 2×, pair 4×, tractor 8× (#57).
 - **Pairs require identical cards (#50):** equal-strength off-suit trump-rank cards (e.g. 2♦+2♣) no longer form phantom pairs/quads — grouping is by identity everywhere (classify, follow validation, tractors, throw checks); strength/tie rules unchanged.
 - **Seeded terminal harness:** `python scripts/play_cli.py` — interactive play (all seats or `--human N`) and `--bots --games N` fuzzer with per-action `validate_state` sweep. Deck/GameEngine accept an injectable `random.Random`. Run the fuzzer after any engine change.
@@ -60,7 +69,7 @@
 | Game state model | `models/game_state.py`, `models/player.py`, `models/bid.py`, `models/friend_declaration.py` | Complete |
 | Game engine | `engine/engine.py`, `engine/tricks.py`, `engine/scoring.py` | Complete |
 | Mode strategies | `modes/upgrade.py`, `modes/find_friends.py` | Complete |
-| Superuser tools | `superuser/inspector.py`, `superuser/mutator.py`, `superuser/api.py` | Complete |
+| Invariant checker | `engine/inspector.py` (`validate_state`; ex-superuser) | Complete |
 | Networking & rooms | `network/app.py`, `network/handler.py`, `network/room.py` | Complete |
 | Game logger | `engine/logger.py` | Complete |
 | Frontend | `frontend/index.html`, `frontend/app.js` | Complete (no mobile support) |
